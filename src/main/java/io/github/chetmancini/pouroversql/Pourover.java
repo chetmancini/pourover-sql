@@ -53,7 +53,15 @@ import java.util.function.Consumer;
  * is {@code null}. Every call opens its own connection and closes the connection, statement and
  * result set before returning (or, for {@link #stream}, when the {@link RowStream} is closed),
  * including when an exception is thrown. JDBC errors are thrown as {@link QueryException}.
- * Instances are immutable and safe to share between threads if the DataSource is.
+ *
+ * <p>Transactions: when a connection arrives with autocommit on, the query runs with autocommit
+ * off (so drivers such as PostgreSQL stream with a cursor) and is rolled back, and autocommit is
+ * turned back on before the connection is closed. A connection that is already in a transaction
+ * (autocommit off) belongs to the caller and is left exactly as it is: no rollback, no change.
+ * If the driver refuses to turn autocommit off, the query runs in autocommit mode, so any writes
+ * it makes are committed.
+ *
+ * <p>Instances are immutable and safe to share between threads if the DataSource is.
  */
 public final class Pourover {
 
@@ -164,27 +172,21 @@ public final class Pourover {
         Objects.requireNonNull(o, "o");
         Connection connection = null;
         PreparedStatement statement = null;
-        boolean originalAutoCommit = true;
-        boolean autoCommitChanged = false;
+        boolean managedTransaction = false;
         try {
             connection = dataSource.getConnection();
-            originalAutoCommit = beginReadOnlyTransaction(connection);
-            autoCommitChanged = true;
+            managedTransaction = beginReadOnlyTransaction(connection);
             statement = prepare(connection, sql, o);
             ResultSet resultSet = statement.executeQuery();
-            return new RowStream(connection, statement, resultSet, secret, o.logFrequency(), originalAutoCommit);
+            return new RowStream(connection, statement, resultSet, secret, o.logFrequency(), managedTransaction);
         } catch (SQLException e) {
             closeAfterFailure(e, statement);
-            if (autoCommitChanged) {
-                endTransaction(connection, originalAutoCommit);
-            }
+            endTransaction(connection, managedTransaction);
             closeAfterFailure(e, connection);
             throw QueryException.wrap(e, secret);
         } catch (RuntimeException | Error e) {
             closeAfterFailure(e, statement);
-            if (autoCommitChanged) {
-                endTransaction(connection, originalAutoCommit);
-            }
+            endTransaction(connection, managedTransaction);
             closeAfterFailure(e, connection);
             throw e;
         }
@@ -254,7 +256,7 @@ public final class Pourover {
         Objects.requireNonNull(sql, "sql");
         Objects.requireNonNull(o, "o");
         try (Connection connection = dataSource.getConnection()) {
-            boolean originalAutoCommit = beginReadOnlyTransaction(connection);
+            boolean managedTransaction = beginReadOnlyTransaction(connection);
             try (PreparedStatement statement = prepare(connection, sql, o);
                  ResultSet resultSet = statement.executeQuery()) {
                 writer.begin(columnKeys(resultSet, fo));
@@ -269,7 +271,7 @@ public final class Pourover {
                 return count;
             } finally {
                 // After the statement and result set are closed, before the connection is returned.
-                endTransaction(connection, originalAutoCommit);
+                endTransaction(connection, managedTransaction);
             }
         } catch (SQLException e) {
             throw QueryException.wrap(e, secret);
@@ -278,25 +280,46 @@ public final class Pourover {
 
     /**
      * Turns autocommit off so drivers honor fetchSize with a cursor (PostgreSQL ignores it in
-     * autocommit mode and loads the whole result into memory).
-     * @return the autocommit value to restore
+     * autocommit mode and loads the whole result into memory), but only when the connection
+     * arrived with autocommit on. A connection already in a transaction belongs to the caller
+     * (for example a transaction-aware or single-connection DataSource) and is left untouched.
+     * A driver that refuses to turn autocommit off (Informix databases without logging) runs the
+     * query in autocommit mode.
+     * @return true when this call turned autocommit off and must roll back and restore it
      */
     private static boolean beginReadOnlyTransaction(Connection connection) throws SQLException {
-        boolean original = connection.getAutoCommit();
-        connection.setAutoCommit(false);
-        return original;
+        if (!connection.getAutoCommit()) {
+            return false;
+        }
+        try {
+            connection.setAutoCommit(false);
+            return true;
+        } catch (SQLException e) {
+            logger.debug("Driver rejected autocommit off (SQLState {}); running in autocommit mode", e.getSQLState());
+            return false;
+        }
     }
 
     /**
-     * Rolls back the read-only transaction and restores autocommit so a pooled connection is
-     * returned as it was lent. Failures are logged, not thrown: the query outcome is already decided.
+     * When {@code managed}, rolls back the read-only transaction and turns autocommit back on so a
+     * pooled connection is returned as it was lent; otherwise does nothing. The restore runs even
+     * if the rollback fails. Failures are logged, not thrown, so they never mask the query outcome.
+     * @param connection the connection
+     * @param managed the result of {@link #beginReadOnlyTransaction(Connection)}
      */
-    static void endTransaction(Connection connection, boolean originalAutoCommit) {
+    static void endTransaction(Connection connection, boolean managed) {
+        if (!managed) {
+            return;
+        }
         try {
             connection.rollback();
-            connection.setAutoCommit(originalAutoCommit);
         } catch (SQLException e) {
-            logger.debug("Could not roll back and restore autocommit", e);
+            logger.debug("Could not roll back the read-only transaction (SQLState {})", e.getSQLState());
+        }
+        try {
+            connection.setAutoCommit(true);
+        } catch (SQLException e) {
+            logger.debug("Could not restore autocommit (SQLState {})", e.getSQLState());
         }
     }
 

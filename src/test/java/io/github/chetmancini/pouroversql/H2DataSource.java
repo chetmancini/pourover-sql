@@ -43,6 +43,8 @@ final class H2DataSource implements DataSource {
     private final List<Connection> handedOut = new CopyOnWriteArrayList<>();
     private final List<String> events = new CopyOnWriteArrayList<>();
     private boolean initialAutoCommit = true;
+    private boolean rejectAutoCommitOff;
+    private boolean failRollback;
 
     H2DataSource() {
         this("");
@@ -84,6 +86,16 @@ final class H2DataSource implements DataSource {
         this.initialAutoCommit = value;
     }
 
+    /** Makes connections throw on {@code setAutoCommit(false)}, like Informix databases without logging. */
+    void rejectAutoCommitOff(boolean value) {
+        this.rejectAutoCommitOff = value;
+    }
+
+    /** Makes {@code rollback()} throw on handed-out connections. */
+    void failRollback(boolean value) {
+        this.failRollback = value;
+    }
+
     /** All connections handed out so far. */
     List<Connection> connections() {
         return handedOut;
@@ -117,8 +129,18 @@ final class H2DataSource implements DataSource {
         Connection proxy = (Connection) Proxy.newProxyInstance(
                 Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, (p, method, args) -> {
                     switch (method.getName()) {
-                        case "setAutoCommit" -> events.add("setAutoCommit(" + args[0] + ")");
-                        case "rollback" -> events.add("rollback");
+                        case "setAutoCommit" -> {
+                            events.add("setAutoCommit(" + args[0] + ")");
+                            if (rejectAutoCommitOff && Boolean.FALSE.equals(args[0])) {
+                                throw new SQLException("Transactions not supported", "HY000", -79744);
+                            }
+                        }
+                        case "rollback" -> {
+                            events.add("rollback");
+                            if (failRollback) {
+                                throw new SQLException("rollback failed", "08003");
+                            }
+                        }
                         case "close" -> events.add("close");
                         case "prepareStatement" -> events.add("prepareStatement autoCommit=" + real.getAutoCommit());
                         default -> { }

@@ -94,7 +94,7 @@ Path csv = db.writeTo("SELECT * FROM cups", dir.resolve("cups.csv"), OutputForma
 
 `forEach` hands each row to a `Consumer` and returns the row count. `QueryOptions` sets fetch size, max rows and timeout; `FormatOptions` sets the key case (`DEFAULT`, `SNAKE`, `CAMEL`).
 
-Queries run with autocommit off and are rolled back, so a query with side effects does not leave its writes behind. Pour-Over is for reading.
+Pour-Over is for reading. When a connection arrives with autocommit on, the query runs with autocommit off and is rolled back, so a query with side effects does not leave its writes behind. A connection that is already in a transaction (autocommit off, for example one borrowed through `Pourover.of(dataSource)` from a transaction-aware DataSource) is left alone: no rollback, no change to autocommit. A driver that refuses to turn autocommit off (such as Informix databases without logging) runs the query in autocommit mode, where writes are committed.
 
 Generate the Javadoc with `./gradlew javadoc`; it lands in `build/docs/javadoc`.
 
@@ -151,7 +151,7 @@ Most Java database libraries are built around mapping rows to objects. That is t
 
 ## What it is not
 
-It is not an ORM or a query builder. It does not generate SQL, map rows to classes, manage schemas or pool connections. It is not a general data-loading tool either: it reads and exports, and it rolls back whatever a query changes.
+It is not an ORM or a query builder. It does not generate SQL, map rows to classes, manage schemas or pool connections. It is not a general data-loading tool either: it reads and exports.
 
 ## Roadmap
 

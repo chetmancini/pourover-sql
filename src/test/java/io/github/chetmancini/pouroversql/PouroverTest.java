@@ -20,13 +20,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import javax.sql.DataSource;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -99,12 +104,108 @@ class PouroverTest {
     }
 
     @Test
-    void autoCommitIsRestoredToItsOriginalValue() throws Exception {
+    void connectionAlreadyInTransactionIsLeftAlone() throws Exception {
         ds.exec("CREATE TABLE t (n INT)");
         ds.initialAutoCommit(false);
         pourover.list("SELECT n FROM t");
-        assertThat(ds.events()).containsExactly(
-                "setAutoCommit(false)", "prepareStatement autoCommit=false", "rollback", "setAutoCommit(false)", "close");
+        assertThat(ds.events()).containsExactly("prepareStatement autoCommit=false", "close");
+        ds.events().clear();
+        try (RowStream stream = pourover.stream("SELECT n FROM t")) {
+            assertThat(stream.rows().count()).isZero();
+        }
+        assertThat(ds.events()).containsExactly("prepareStatement autoCommit=false", "close");
+    }
+
+    @Test
+    void callersOpenTransactionIsNotRolledBack() throws Exception {
+        ds.exec("CREATE TABLE t (n INT)");
+        try (Connection caller = DriverManager.getConnection(callerUrl(), H2DataSource.USER, H2DataSource.PASSWORD)) {
+            caller.setAutoCommit(false);
+            try (Statement s = caller.createStatement()) {
+                s.execute("INSERT INTO t VALUES (1)");
+            }
+            // A DataSource that hands out the caller's own connection and ignores close(),
+            // like a transaction-aware proxy or a single-connection DataSource.
+            Pourover shared = Pourover.of(sharedConnectionDataSource(caller));
+            assertThat(shared.list("SELECT COUNT(*) AS \"c\" FROM t").get(0).get("c")).isEqualTo(1L);
+            assertThat(shared.list("SELECT COUNT(*) AS \"c\" FROM t").get(0).get("c")).isEqualTo(1L);
+            try (RowStream stream = shared.stream("SELECT n FROM t")) {
+                assertThat(stream.rows().count()).isEqualTo(1);
+            }
+            assertThat(caller.getAutoCommit()).isFalse();
+            caller.commit();
+        }
+        assertThat(pourover.list("SELECT n FROM t")).hasSize(1);
+    }
+
+    private String callerUrl() throws SQLException {
+        try (Connection c = ds.getConnection()) {
+            return c.getMetaData().getURL();
+        }
+    }
+
+    private static DataSource sharedConnectionDataSource(Connection shared) {
+        Connection nonClosing = (Connection) Proxy.newProxyInstance(
+                Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, (p, method, args) -> {
+                    if (method.getName().equals("close")) {
+                        return null;
+                    }
+                    try {
+                        return method.invoke(shared, args);
+                    } catch (InvocationTargetException e) {
+                        throw e.getCause();
+                    }
+                });
+        return (DataSource) Proxy.newProxyInstance(
+                DataSource.class.getClassLoader(), new Class<?>[] {DataSource.class}, (p, method, args) -> {
+                    if (method.getName().equals("getConnection")) {
+                        return nonClosing;
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    @Test
+    void queriesStillRunWhenDriverRejectsAutoCommitOff() throws Exception {
+        ds.exec("CREATE TABLE t (n INT)", "INSERT INTO t VALUES (1), (2)");
+        ds.rejectAutoCommitOff(true);
+        List<String> unmanaged = List.of("setAutoCommit(false)", "prepareStatement autoCommit=true", "close");
+
+        assertThat(pourover.list("SELECT n FROM t")).hasSize(2);
+        assertThat(ds.events()).containsExactlyElementsOf(unmanaged);
+
+        ds.events().clear();
+        try (RowStream stream = pourover.stream("SELECT n FROM t")) {
+            assertThat(stream.rows().count()).isEqualTo(2);
+        }
+        assertThat(ds.events()).containsExactlyElementsOf(unmanaged);
+
+        ds.events().clear();
+        Path out = tempDir.resolve("rejected.jsonl");
+        pourover.writeTo("SELECT n AS \"n\" FROM t ORDER BY n", out, OutputFormat.JSONL);
+        assertThat(Files.readString(out)).isEqualTo("{\"n\":1}" + NL + "{\"n\":2}" + NL);
+        assertThat(ds.events()).containsExactlyElementsOf(unmanaged);
+        assertThat(ds.allConnectionsClosed()).isTrue();
+    }
+
+    @Test
+    void autoCommitIsRestoredEvenWhenRollbackFails() throws Exception {
+        ds.exec("CREATE TABLE t (n INT)", "INSERT INTO t VALUES (1)");
+        ds.failRollback(true);
+        assertThat(pourover.list("SELECT n FROM t")).hasSize(1);
+        assertThat(ds.events()).endsWith("rollback", "setAutoCommit(true)", "close");
+
+        // Neither a rollback failure nor the restore masks the original query error.
+        ds.events().clear();
+        assertThatThrownBy(() -> pourover.list("SELECT * FROM missing_table"))
+                .isInstanceOf(QueryException.class).hasMessageContaining("MISSING_TABLE");
+        assertThat(ds.events()).endsWith("rollback", "setAutoCommit(true)", "close");
+
+        ds.events().clear();
+        try (RowStream stream = pourover.stream("SELECT n FROM t")) {
+            assertThat(stream.rows().count()).isEqualTo(1);
+        }
+        assertThat(ds.events()).endsWith("rollback", "setAutoCommit(true)", "close");
     }
 
     @Test
