@@ -1,35 +1,27 @@
 [versions]
 shadow = "9.6.1"
-slf4j = "1.7.25"
-commons-cli = "1.4"
-commons-dbutils = "1.7"
-commons-text = "1.6"
-commons-collections4 = "4.2"
-gson = "2.8.5"
-guava = "27.0.1-jre"
-informix = "4.10.12"
-mssql = "7.0.0.jre8"
-redshift = "1.2.10.1009"
-mysql = "8.0.9-rc"
-postgresql = "42.2.1"
-snowflake = "3.6.25"
-junit = "5.13.4"
-assertj = "3.27.3"
-h2 = "2.4.240"
+slf4j = "2.0.20"
+commons-cli = "1.11.0"
+gson = "2.15.0"
+informix = "15.0.1.4"
+mssql = "13.6.1.jre11"
+redshift = "2.3.0"
+mysql = "26.10.0"
+postgresql = "42.7.14"
+snowflake = "4.4.0"
+junit = "6.1.3"
+assertj = "3.27.7"
+h2 = "2.5.252"
 
 [libraries]
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
 commons-cli = { module = "commons-cli:commons-cli", version.ref = "commons-cli" }
-commons-dbutils = { module = "commons-dbutils:commons-dbutils", version.ref = "commons-dbutils" }
-commons-text = { module = "org.apache.commons:commons-text", version.ref = "commons-text" }
-commons-collections4 = { module = "org.apache.commons:commons-collections4", version.ref = "commons-collections4" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
-guava = { module = "com.google.guava:guava", version.ref = "guava" }
 informix-jdbc = { module = "com.ibm.informix:jdbc", version.ref = "informix" }
 mssql-jdbc = { module = "com.microsoft.sqlserver:mssql-jdbc", version.ref = "mssql" }
 redshift-jdbc = { module = "com.amazon.redshift:redshift-jdbc42", version.ref = "redshift" }
-mysql-connector = { module = "mysql:mysql-connector-java", version.ref = "mysql" }
+mysql-connector = { module = "com.mysql:mysql-connector-j", version.ref = "mysql" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
 snowflake-jdbc = { module = "net.snowflake:snowflake-jdbc", version.ref = "snowflake" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }

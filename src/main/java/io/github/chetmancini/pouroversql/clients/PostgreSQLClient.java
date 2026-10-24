@@ -93,7 +93,7 @@ public class PostgreSQLClient extends AbstractSQLClient {
 
     @Override
     protected String getDriverName() {
-        return "org.postgresql.jdbc.Driver";
+        return "org.postgresql.Driver";
     }
 
 }

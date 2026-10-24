@@ -17,7 +17,6 @@
 package io.github.chetmancini.pouroversql.util;
 
 import io.github.chetmancini.pouroversql.writers.KeyCaseFormat;
-import org.apache.commons.text.CaseUtils;
 
 import java.util.function.Function;
 
@@ -53,7 +52,18 @@ public class TextFormat {
      * @return string formatted as camelcase.
      */
     public static String toCamelCase(String input) {
-        return CaseUtils.toCamelCase(toSnakeCase(input), false, '_');
+        String snake = toSnakeCase(input);
+        if (snake == null) {
+            return null;
+        }
+        StringBuilder result = new StringBuilder(snake.length());
+        for (String token : snake.split("_")) {
+            if (token.isEmpty()) {
+                continue;
+            }
+            result.append(result.length() == 0 ? token : Character.toUpperCase(token.charAt(0)) + token.substring(1));
+        }
+        return result.toString();
     }
 
     /**

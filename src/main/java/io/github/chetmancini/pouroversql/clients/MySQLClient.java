@@ -61,6 +61,6 @@ public class MySQLClient extends AbstractSQLClient {
 
     @Override
     protected String getDriverName() {
-        return "com.mysql.jdbc.Driver";
+        return "com.mysql.cj.jdbc.Driver";
     }
 }

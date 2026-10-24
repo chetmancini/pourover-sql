@@ -15,13 +15,11 @@ limitations under the License.
 
 package io.github.chetmancini.pouroversql.clients;
 
-import org.apache.commons.lang3.BooleanUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Properties;
 
-import static org.apache.commons.lang3.ObjectUtils.defaultIfNull;
 
 /**
  * SQLParams
@@ -82,7 +80,7 @@ public class SQLParams implements InputParams {
     }
 
     public String getHost(String defaultHost) {
-        return defaultIfNull(this.host, defaultHost);
+        return this.host != null ? this.host : defaultHost;
     }
 
     public void setHost(String host) {
@@ -94,7 +92,7 @@ public class SQLParams implements InputParams {
     }
 
     public Integer getPort(int defaultPort) {
-        return defaultIfNull(this.port, defaultPort);
+        return this.port != null ? this.port : defaultPort;
     }
 
     public void setPort(Integer port) {
@@ -134,7 +132,7 @@ public class SQLParams implements InputParams {
     }
 
     public Boolean getPropertyAsBoolean(String propertyName) {
-        return BooleanUtils.toBooleanObject(this.customProperties.getProperty(propertyName));
+        return toBooleanObject(this.customProperties.getProperty(propertyName));
     }
 
     public Integer getPropertyAsInteger(String propertyName) {
@@ -158,6 +156,20 @@ public class SQLParams implements InputParams {
         logger.info("Database: " + this.getDatabase());
         for (String name : this.customProperties.stringPropertyNames()) {
             logger.info(name + ":" + this.customProperties.getProperty(name));
+        }
+    }
+
+    private static Boolean toBooleanObject(String value) {
+        if (value == null) {
+            return null;
+        }
+        switch (value.toLowerCase()) {
+            case "true": case "t": case "yes": case "y": case "on": case "1":
+                return Boolean.TRUE;
+            case "false": case "f": case "no": case "n": case "off": case "0":
+                return Boolean.FALSE;
+            default:
+                return null;
         }
     }
 }

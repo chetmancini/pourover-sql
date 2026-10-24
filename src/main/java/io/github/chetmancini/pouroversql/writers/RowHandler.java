@@ -16,14 +16,13 @@ package io.github.chetmancini.pouroversql.writers;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import io.github.chetmancini.pouroversql.clients.FormattingParams;
-import org.apache.commons.dbutils.BasicRowProcessor;
-import org.apache.commons.dbutils.RowProcessor;
+import io.github.chetmancini.pouroversql.util.ResultSets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +34,6 @@ import static io.github.chetmancini.pouroversql.util.TextFormat.getFunctionByKey
 public class RowHandler {
     private final Logger logger = LoggerFactory.getLogger(RowHandler.class);
 
-    private static final RowProcessor ROW_PROCESSOR = new BasicRowProcessor();
     private RowWriter writer;
     private int logFrequency;
     private FormattingParams formattingParams;
@@ -84,14 +82,13 @@ public class RowHandler {
     }
 
     protected Map<String, Object> handleRow(ResultSet rs, Function<String, String> keyTransform) throws SQLException {
+        Map<String, Object> row = ResultSets.toMap(rs);
         if (this.formattingParams.getKeyCaseFormat() == KeyCaseFormat.DEFAULT) {
-            return this.ROW_PROCESSOR.toMap(rs);
-        } else {
-            return this.ROW_PROCESSOR.toMap(rs).entrySet().stream().collect(
-                    Collectors.toMap(e -> keyTransform.apply(e.getKey()), Map.Entry::getValue)
-            );
+            return row;
         }
+        Map<String, Object> transformed = new LinkedHashMap<>(row.size() * 2);
+        row.forEach((key, value) -> transformed.put(keyTransform.apply(key), value));
+        return transformed;
     }
-
 
 }

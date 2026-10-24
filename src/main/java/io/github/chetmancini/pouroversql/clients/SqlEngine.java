@@ -15,7 +15,6 @@ limitations under the License.
 
 package io.github.chetmancini.pouroversql.clients;
 
-import org.apache.commons.lang3.EnumUtils;
 
 /**
  * <h1>SQLEngine</h1>
@@ -77,7 +76,12 @@ public enum SqlEngine {
      * @return The SQLEngine that matches the given name.
      */
     public static SqlEngine byName(String name) {
-        return EnumUtils.getEnum(SqlEngine.class, normalizeName(name));
+        String normalized = normalizeName(name);
+        try {
+            return SqlEngine.valueOf(normalized);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
 }

@@ -14,15 +14,17 @@ limitations under the License.
  */
 package io.github.chetmancini.pouroversql.clients;
 
-import org.apache.commons.dbutils.DbUtils;
-import org.apache.commons.dbutils.QueryRunner;
-import org.apache.commons.dbutils.StatementConfiguration;
-import org.apache.commons.dbutils.handlers.MapListHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import io.github.chetmancini.pouroversql.util.ResultSets;
 import io.github.chetmancini.pouroversql.writers.RowHandler;
 
 import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -65,37 +67,61 @@ public abstract class AbstractSQLClient implements SQLClient {
         this.queryParams = queryParams;
     }
 
-    /**
-     * Builds the StatementConfiguration based on the
-     * provided QueryParams.
-     * @return StatementConfiguration
-     */
-    private StatementConfiguration buildStatementConfiguration() {
-        return new StatementConfiguration.Builder()
-                .fetchSize(this.queryParams.getFetchSize())
-                .queryTimeout(this.queryParams.getTimeout())
-                .maxRows(this.queryParams.getMaxRows())
-                .build();
+    @FunctionalInterface
+    private interface ResultSetFunction<T> {
+        T apply(ResultSet rs) throws SQLException;
     }
 
     /**
-     * Base StatementConfiguration
-     * @return StatementConfiguration
+     * Best-effort driver registration. A missing driver is not fatal here: DriverManager
+     * may still find it via service discovery, and a real failure surfaces on connect.
      */
-    private StatementConfiguration getDefaultStatementConfiguration(){
-        return new StatementConfiguration.Builder().build();
+    private void loadDriver() {
+        try {
+            Class.forName(this.getDriverName());
+        } catch (ClassNotFoundException | LinkageError e) {
+            logger.debug("JDBC driver class not found: " + this.getDriverName());
+        }
+    }
+
+    /**
+     * Runs a query with fetch size, max rows and timeout from the current QueryParams,
+     * closing the connection, statement and result set.
+     */
+    private <T> T execute(String queryText, ResultSetFunction<T> mapper) throws SQLException {
+        if (queryText == null) {
+            throw new SQLException("Null SQL statement");
+        }
+        this.loadDriver();
+        DataSource ds = this.initDataSource();
+        try (Connection conn = ds.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(queryText)) {
+            if (this.queryParams.getFetchSize() != null) {
+                stmt.setFetchSize(this.queryParams.getFetchSize());
+            }
+            if (this.queryParams.getTimeout() != null) {
+                stmt.setQueryTimeout(this.queryParams.getTimeout());
+            }
+            if (this.queryParams.getMaxRows() != null) {
+                stmt.setMaxRows(this.queryParams.getMaxRows());
+            }
+            try (ResultSet rs = stmt.executeQuery()) {
+                return mapper.apply(rs);
+            }
+        }
     }
 
     @Override
     public List<Map<String, Object>> queryAsList(String queryText) {
         logger.debug("Querying for: " + queryText);
         try {
-            DbUtils.loadDriver(this.getDriverName());
-            DataSource ds = this.initDataSource();
-            StatementConfiguration sc = this.buildStatementConfiguration();
-            QueryRunner queryRunner = new QueryRunner(ds, sc);
-            MapListHandler handler = new MapListHandler();
-            return queryRunner.query(queryText, handler);
+            return this.execute(queryText, rs -> {
+                List<Map<String, Object>> rows = new ArrayList<>();
+                while (rs.next()) {
+                    rows.add(ResultSets.toMap(rs));
+                }
+                return rows;
+            });
         } catch (Exception e) {
             logger.error(e.getMessage());
             e.printStackTrace();
@@ -107,11 +133,7 @@ public abstract class AbstractSQLClient implements SQLClient {
     public int queryWithHandler(String queryText, RowHandler handler) {
         logger.debug("Querying for: " + queryText);
         try {
-            DbUtils.loadDriver(this.getDriverName());
-            DataSource ds = this.initDataSource();
-            StatementConfiguration sc = this.buildStatementConfiguration();
-            CustomQueryRunner cqr = new CustomQueryRunner(ds, sc, handler);
-            return cqr.query(queryText);
+            return this.execute(queryText, handler::handle);
         } catch (Exception e) {
             logger.error(e.getMessage());
             e.printStackTrace();

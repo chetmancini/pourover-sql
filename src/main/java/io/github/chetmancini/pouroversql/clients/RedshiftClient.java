@@ -15,7 +15,6 @@ limitations under the License.
 
 package io.github.chetmancini.pouroversql.clients;
 
-import com.amazon.redshift.jdbc42.DataSource;
 
 /**
  * <h1>Redshift Client</h1>
@@ -44,16 +43,11 @@ public class RedshiftClient extends AbstractSQLClient {
 
     @Override
     public javax.sql.DataSource initDataSource() {
-        DataSource ds = new DataSource();
-        ds.setUserID(params.getUser());
-        ds.setPassword(params.getPassword());
-        ds.setURL(this.getRedshiftURL());
-        ds.setLanguage(params.getPropertyAsString("language"));
-        return ds;
+        return DriverManagerDataSource.of(this.getRedshiftURL(), params.getUser(), params.getPassword());
     }
 
     @Override
     protected String getDriverName() {
-        return "com.amazon.redshift.jdbc42.Driver";
+        return "com.amazon.redshift.Driver";
     }
 }

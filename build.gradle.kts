@@ -34,20 +34,16 @@ java {
 
 repositories {
     mavenCentral()
-    maven {
-        url = uri("https://s3.amazonaws.com/redshift-maven-repository/release")
-    }
 }
 
+// slf4j-simple is a runtime binding for the CLI only; it must never reach the library POM.
+val cli: Configuration by configurations.creating
+
 dependencies {
+    cli(libs.slf4j.simple)
     api(libs.slf4j.api)
-    implementation(libs.slf4j.simple)
     implementation(libs.commons.cli)
-    implementation(libs.commons.dbutils)
-    implementation(libs.commons.text)
-    implementation(libs.commons.collections4)
     implementation(libs.gson)
-    implementation(libs.guava)
     implementation(libs.informix.jdbc)
     implementation(libs.mssql.jdbc)
     implementation(libs.redshift.jdbc)
@@ -64,6 +60,18 @@ dependencies {
 
 application {
     mainClass = "io.github.chetmancini.pouroversql.ExtractorRunner"
+}
+
+tasks.shadowJar {
+    configurations = listOf(project.configurations.runtimeClasspath.get(), cli)
+}
+
+tasks.run.configure {
+    classpath += cli
+}
+
+tasks.startScripts {
+    classpath = files(tasks.jar, configurations.runtimeClasspath, cli)
 }
 
 tasks.test {

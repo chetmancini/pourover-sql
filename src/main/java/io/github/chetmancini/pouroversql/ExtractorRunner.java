@@ -97,7 +97,7 @@ public class ExtractorRunner {
     }
 
     private static void configureLogging() {
-        System.setProperty(org.slf4j.impl.SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "trace");
+        System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "trace");
     }
 
     private static String readSqlFromFile(String filename) throws IOException {

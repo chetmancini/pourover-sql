@@ -16,7 +16,7 @@ limitations under the License.
 package io.github.chetmancini.pouroversql.clients;
 
 import javax.sql.DataSource;
-import net.snowflake.client.jdbc.SnowflakeBasicDataSource;
+import java.util.Properties;
 
 /**
  * <h1>PostgreSQL Client</h1>
@@ -48,12 +48,19 @@ public class SnowflakeClient extends AbstractSQLClient {
 
     @Override
     protected DataSource initDataSource() {
-        SnowflakeBasicDataSource snowflakeDS = new SnowflakeBasicDataSource();
-        snowflakeDS.setDatabaseName(this.params.getDatabase());
-        snowflakeDS.setUser(this.params.getUser());
-        snowflakeDS.setPassword(this.params.getPassword());
-        snowflakeDS.setPortNumber(this.params.getPort());
-        return snowflakeDS;
+        Properties props = new Properties();
+        if (this.params.getUser() != null) {
+            props.setProperty("user", this.params.getUser());
+        }
+        if (this.params.getPassword() != null) {
+            props.setProperty("password", this.params.getPassword());
+        }
+        if (this.params.getDatabase() != null) {
+            props.setProperty("db", this.params.getDatabase());
+        }
+        String host = this.params.getHost();
+        String port = this.params.getPort() != null ? ":" + this.params.getPort() : "";
+        return new DriverManagerDataSource("jdbc:snowflake://" + host + port, props);
     }
 
     @Override
