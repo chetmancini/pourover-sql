@@ -381,6 +381,12 @@ class PouroverTest {
         assertThatThrownBy(() -> new FormatOptions(KeyCase.SNAKE).formatKeys(row))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("userId").hasMessageContaining("user_id");
+        Map<String, Object> upper = new java.util.LinkedHashMap<>();
+        upper.put("USER_ID", 1);
+        upper.put("userId", 2);
+        assertThatThrownBy(() -> new FormatOptions(KeyCase.SNAKE).formatKeys(upper))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Columns 'USER_ID' and 'userId' both map to key 'user_id' under SNAKE key case");
 
         ds.exec("CREATE TABLE t (a INT, b INT)", "INSERT INTO t VALUES (1, 2)");
         String sql = "SELECT a AS \"userId\", b AS \"user_id\" FROM t";
