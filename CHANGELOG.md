@@ -2,6 +2,10 @@
 
 ## 1.0.0 (unreleased)
 
+### Playground
+
+A browser playground on in-memory H2 (`./gradlew :demo:run`) shows JSONL, CSV and the Java call for any SELECT, plus runnable examples in `examples/`; neither needs Docker or the CLI.
+
 ### Breaking: new Java API
 
 The Java API is now built around records and a single `Pourover` entry point. `SQLExtractor` has been removed; there is no deprecated shim. The command-line flags are unchanged.

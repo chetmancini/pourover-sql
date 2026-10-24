@@ -1,0 +1,309 @@
+<!doctype html>
+<!--
+  Copyright 2026 Chet Mancini
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pour-Over SQL Playground</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #edf1f3;
+    --surface: #fbfcfc;
+    --ink: #14232b;
+    --muted: #55656d;
+    --line: #cbd5da;
+    --accent: #1b5c85;
+    --accent-ink: #ffffff;
+    --code-bg: #f3f6f7;
+    --error-bg: #fbe9e6;
+    --error-ink: #8a1f11;
+    --focus: #1b5c85;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151210;
+      --surface: #1e1a17;
+      --ink: #efe7de;
+      --muted: #a69a8d;
+      --line: #3a332d;
+      --accent: #e3a857;
+      --accent-ink: #1a1308;
+      --code-bg: #171411;
+      --error-bg: #3a1a15;
+      --error-ink: #ffb4a6;
+      --focus: #e3a857;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.5 var(--sans);
+  }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 16px 48px; }
+  header { margin-bottom: 24px; max-width: 62ch; }
+  h1 { font: 600 2.1rem/1.15 var(--serif); margin: 0 0 8px; letter-spacing: -0.01em; }
+  header p { margin: 0 0 6px; color: var(--muted); }
+  header a { color: var(--accent); font-weight: 600; }
+  main { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 20px; align-items: start; }
+  @media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  h2 { font: 600 1.05rem/1.3 var(--serif); margin: 0 0 10px; }
+  textarea {
+    width: 100%; min-height: 200px; resize: vertical;
+    font: 0.92rem/1.5 var(--mono); color: var(--ink);
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 12px;
+  }
+  .samples { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; padding: 0; list-style: none; }
+  .samples button, .copy {
+    font: 0.85rem var(--sans); color: var(--ink); background: transparent;
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer;
+  }
+  .samples button:hover, .copy:hover { border-color: var(--accent); }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 12px; }
+  fieldset { border: 0; margin: 0; padding: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  legend { float: left; padding: 0; margin-right: 8px; font-size: 0.9rem; color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg label { position: relative; cursor: pointer; }
+  .seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .seg span { display: block; padding: 6px 12px; font-size: 0.88rem; }
+  .seg input:checked + span { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .seg input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: -3px; }
+  .run {
+    margin-left: auto; font: 600 0.95rem var(--sans); color: var(--accent-ink); background: var(--accent);
+    border: 0; border-radius: 6px; padding: 9px 20px; cursor: pointer;
+  }
+  .run[disabled] { opacity: 0.6; cursor: progress; }
+  .hint { color: var(--muted); font-size: 0.8rem; margin: 10px 0 0; }
+  kbd { font: 0.78rem var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  /* The one memorable element: a line of coffee drips through the results panel while a query runs. */
+  .drip { height: 3px; margin: -16px -16px 14px; border-radius: 10px 10px 0 0; overflow: hidden; background: transparent; }
+  .drip::after { content: ""; display: block; height: 100%; width: 0; background: var(--accent); }
+  .drip.busy::after { animation: pour 0.9s ease-in-out infinite; }
+  @keyframes pour { 0% { width: 0; margin-left: 0; } 50% { width: 60%; margin-left: 20%; } 100% { width: 0; margin-left: 100%; } }
+  @media (prefers-reduced-motion: reduce) { .drip.busy::after { animation: none; width: 100%; } }
+  [role=tablist] { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+  [role=tab] {
+    font: 0.95rem var(--sans); color: var(--muted); background: none; border: 0;
+    border-bottom: 3px solid transparent; padding: 8px 14px; cursor: pointer; margin-bottom: -1px;
+  }
+  [role=tab][aria-selected=true] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+  .tabhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .status { color: var(--muted); font-size: 0.9rem; margin: 0; min-height: 1.4em; }
+  pre {
+    margin: 0; padding: 12px; min-height: 220px; max-height: 480px; overflow: auto;
+    background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px;
+    font: 0.85rem/1.5 var(--mono); white-space: pre; tab-size: 4;
+  }
+  .error {
+    background: var(--error-bg); color: var(--error-ink); border-radius: 6px;
+    padding: 10px 12px; margin: 0 0 12px; font: 0.88rem/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  [hidden] { display: none !important; }
+  footer { margin-top: 24px; color: var(--muted); font-size: 0.82rem; max-width: 70ch; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Pour-Over SQL</h1>
+    <p>Send a SQL query to a database and get rows back as JSONL, CSV or Java maps, with the key case you want.
+       This playground runs the real library on an in-memory H2 database of fictional coffee orders.</p>
+    <p><a href="https://github.com/chetmancini/pourover-sql" rel="noopener">Pour-Over SQL on GitHub</a></p>
+  </header>
+
+  <main>
+    <section class="panel" aria-labelledby="query-h">
+      <h2 id="query-h">Query</h2>
+      <ul class="samples" aria-label="Sample queries" id="samples"></ul>
+      <label class="sr" for="sql">SQL query</label>
+      <textarea id="sql" spellcheck="false" autocomplete="off" autocapitalize="off" aria-describedby="hint"></textarea>
+      <div class="controls">
+        <fieldset>
+          <legend>Key case</legend>
+          <span class="seg" role="radiogroup" aria-label="Key case">
+            <label><input type="radio" name="keyCase" value="default" checked><span>default</span></label>
+            <label><input type="radio" name="keyCase" value="snake"><span>snake_case</span></label>
+            <label><input type="radio" name="keyCase" value="camel"><span>camelCase</span></label>
+          </span>
+        </fieldset>
+        <button class="run" id="run" type="button" aria-label="Run query">Run</button>
+      </div>
+      <p class="hint" id="hint">Press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> or <kbd>Cmd</kbd>+<kbd>Enter</kbd> to run.
+        One SELECT at a time; tables are <code>orders</code> and <code>drinks</code>.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="result-h">
+      <div class="drip" id="drip" aria-hidden="true"></div>
+      <h2 id="result-h">Result</h2>
+      <div class="error" id="error" role="alert" hidden></div>
+      <div role="tablist" aria-label="Output format">
+        <button role="tab" id="tab-jsonl" aria-controls="out-jsonl" aria-selected="true" tabindex="0">JSONL</button>
+        <button role="tab" id="tab-csv" aria-controls="out-csv" aria-selected="false" tabindex="-1">CSV</button>
+        <button role="tab" id="tab-java" aria-controls="out-java" aria-selected="false" tabindex="-1">Java</button>
+      </div>
+      <div class="tabhead">
+        <p class="status" id="status" aria-live="polite">Run a query to see rows.</p>
+        <button class="copy" id="copy" type="button" aria-label="Copy JSONL to clipboard">Copy</button>
+      </div>
+      <pre role="tabpanel" id="out-jsonl" aria-labelledby="tab-jsonl" tabindex="0"></pre>
+      <pre role="tabpanel" id="out-csv" aria-labelledby="tab-csv" tabindex="0" hidden></pre>
+      <pre role="tabpanel" id="out-java" aria-labelledby="tab-java" tabindex="0" hidden></pre>
+    </section>
+  </main>
+
+  <footer>Everything here is fictional sample data. The server listens on this machine only, runs one read-only
+    statement per request, and shows at most 1,000 rows.</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var SAMPLES = [
+    { label: "All orders", sql: 'SELECT *\nFROM orders\nORDER BY "OrderId"' },
+    { label: "Spend per customer", sql: 'SELECT "CustomerName",\n       SUM("Quantity" * "UnitPrice") AS "TotalSpent"\nFROM orders\nGROUP BY "CustomerName"\nORDER BY "TotalSpent" DESC' },
+    { label: "Commas, quotes and NULLs", sql: 'SELECT "OrderId", "CustomerName", "Note"\nFROM orders\nORDER BY "OrderId"' },
+    { label: "Join with drinks", sql: 'SELECT o."OrderId", d."DrinkName", d."IsDecaf", o."PlacedAt"\nFROM orders o\nJOIN drinks d ON d."DrinkName" = o."DrinkName"\nORDER BY o."PlacedAt"' }
+  ];
+  var TABS = ["jsonl", "csv", "java"];
+  var LABELS = { jsonl: "JSONL", csv: "CSV", java: "Java" };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var sql = $("sql"), runBtn = $("run"), errorBox = $("error"), status = $("status"), drip = $("drip"), copyBtn = $("copy");
+  var outputs = { jsonl: $("out-jsonl"), csv: $("out-csv"), java: $("out-java") };
+  var current = "jsonl";
+  var inFlight = 0;
+
+  function keyCase() { return document.querySelector('input[name="keyCase"]:checked').value; }
+
+  function selectTab(name, focus) {
+    current = name;
+    TABS.forEach(function (t) {
+      var tab = $("tab-" + t), on = t === name;
+      tab.setAttribute("aria-selected", on ? "true" : "false");
+      tab.tabIndex = on ? 0 : -1;
+      outputs[t].hidden = !on;
+      if (on && focus) tab.focus();
+    });
+    copyBtn.setAttribute("aria-label", "Copy " + LABELS[name] + " to clipboard");
+  }
+
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.hidden = false;
+  }
+
+  function run() {
+    var ticket = ++inFlight;
+    errorBox.hidden = true;
+    runBtn.disabled = true;
+    drip.classList.add("busy");
+    status.textContent = "Running...";
+    fetch("/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sql: sql.value, keyCase: keyCase() })
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (body) { return { ok: res.ok, body: body, status: res.status }; });
+    }).then(function (r) {
+      if (ticket !== inFlight) return;
+      if (!r.ok) {
+        showError(r.body.error || ("Request failed with status " + r.status + "."));
+        status.textContent = "No result.";
+        return;
+      }
+      outputs.jsonl.textContent = r.body.jsonl;
+      outputs.csv.textContent = r.body.csv;
+      outputs.java.textContent = r.body.javaSnippet;
+      var n = r.body.rowCount;
+      status.textContent = n + (n === 1 ? " row" : " rows") + (r.body.truncated ? " (truncated at 1,000)" : "");
+    }).catch(function () {
+      if (ticket !== inFlight) return;
+      showError("Could not reach the playground server. Is it still running?");
+      status.textContent = "No result.";
+    }).then(function () {
+      if (ticket !== inFlight) return;
+      runBtn.disabled = false;
+      drip.classList.remove("busy");
+    });
+  }
+
+  function copy() {
+    var text = outputs[current].textContent;
+    var done = function () {
+      copyBtn.textContent = "Copied";
+      setTimeout(function () { copyBtn.textContent = "Copy"; }, 1500);
+    };
+    var fallback = function () {
+      var range = document.createRange();
+      range.selectNodeContents(outputs[current]);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      try { if (document.execCommand("copy")) done(); } catch (e) { /* selection stays highlighted for a manual copy */ }
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  SAMPLES.forEach(function (s) {
+    var li = document.createElement("li"), b = document.createElement("button");
+    b.type = "button";
+    b.textContent = s.label;
+    b.addEventListener("click", function () { sql.value = s.sql; run(); });
+    li.appendChild(b);
+    $("samples").appendChild(li);
+  });
+
+  TABS.forEach(function (t, i) {
+    var tab = $("tab-" + t);
+    tab.addEventListener("click", function () { selectTab(t, false); });
+    tab.addEventListener("keydown", function (e) {
+      var next = null;
+      if (e.key === "ArrowRight") next = TABS[(i + 1) % TABS.length];
+      else if (e.key === "ArrowLeft") next = TABS[(i + TABS.length - 1) % TABS.length];
+      else if (e.key === "Home") next = TABS[0];
+      else if (e.key === "End") next = TABS[TABS.length - 1];
+      if (next) { e.preventDefault(); selectTab(next, true); }
+    });
+  });
+
+  runBtn.addEventListener("click", run);
+  copyBtn.addEventListener("click", copy);
+  sql.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="keyCase"]'), function (r) {
+    r.addEventListener("change", run);
+  });
+
+  sql.value = SAMPLES[2].sql;
+  run();
+})();
+</script>
+</body>
+</html>
