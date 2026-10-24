@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * <h1>CSVRowWriter</h1>
  * CSVRowWriter is a type of writer that outputs to CSV. Quoting, null and temporal
  * rendering follow {@link RowFormatter}.
  */

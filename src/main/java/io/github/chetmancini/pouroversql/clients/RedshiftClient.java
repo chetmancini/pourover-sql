@@ -18,7 +18,6 @@ package io.github.chetmancini.pouroversql.clients;
 import io.github.chetmancini.pouroversql.ConnectionParams;
 
 /**
- * <h1>Redshift Client</h1>
  * Provide facilities for querying to Redshift. Custom properties are passed to the driver.
  *
  * @author  Chet Mancini

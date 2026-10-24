@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * <h1>AbstractRowWriter</h1>
+ * Base class for row writers.
  */
 public abstract class AbstractRowWriter implements RowWriter {
 

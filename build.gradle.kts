@@ -191,7 +191,10 @@ signing {
     }
 }
 
-// Doclint disabled: the legacy sources have many missing-comment javadoc errors under JDK 21.
-tasks.javadoc {
-    (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:none", "-quiet")
+// Doclint checks the API docs (also for :demo and :examples); missing comments are allowed,
+// malformed ones are not. Warnings are shown, so a clean build prints none.
+allprojects {
+    tasks.withType<Javadoc>().configureEach {
+        (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:all,-missing", "-quiet")
+    }
 }

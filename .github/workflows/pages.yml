@@ -1,0 +1,50 @@
+# Copyright 2026 Chet Mancini
+# Licensed under the Apache License, Version 2.0.
+#
+# Builds the Javadoc and deploys it to GitHub Pages.
+# Disabled until the author enables Pages for the repository: it only runs on manual dispatch,
+# and has no push or pull_request trigger.
+name: Javadoc (Pages)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Javadoc
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Generate Javadoc
+        run: ./gradlew javadoc
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: build/docs/javadoc
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

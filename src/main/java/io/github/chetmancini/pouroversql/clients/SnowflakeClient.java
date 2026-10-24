@@ -21,7 +21,6 @@ import javax.sql.DataSource;
 import java.util.Properties;
 
 /**
- * <h1>Snowflake Client</h1>
  * Provide facilities for querying Snowflake. Custom properties (for example
  * {@code warehouse}, {@code role}, {@code schema}) are passed to the driver.
  *

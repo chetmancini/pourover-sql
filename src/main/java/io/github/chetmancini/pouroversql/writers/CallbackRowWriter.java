@@ -21,7 +21,6 @@ import java.util.Objects;
 import java.util.function.Consumer;
 
 /**
- * <h1>CallbackRowWriter</h1>
  * A RowWriter that 'writes' rows by passing each one to a consumer instead of a file like output.
  */
 public class CallbackRowWriter extends AbstractRowWriter implements RowWriter {

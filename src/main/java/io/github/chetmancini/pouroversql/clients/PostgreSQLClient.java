@@ -21,7 +21,6 @@ import org.postgresql.ds.PGSimpleDataSource;
 import javax.sql.DataSource;
 
 /**
- * <h1>PostgreSQLClient</h1>
  * Provide facilities for querying to postgres. Supported custom properties are listed
  * on {@link ConnectionParams}; connections are read-only unless {@code readOnly=false}.
  *

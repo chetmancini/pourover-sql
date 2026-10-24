@@ -24,7 +24,6 @@ import java.util.Objects;
 import java.util.Properties;
 
 /**
- * <h1>AbstractSQLClient</h1>
  * Subclass for all different engine types. Each subclass turns {@link ConnectionParams}
  * into an engine-specific {@link DataSource}.
  */

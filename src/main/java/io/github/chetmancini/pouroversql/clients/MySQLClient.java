@@ -21,7 +21,6 @@ import io.github.chetmancini.pouroversql.ConnectionParams;
 import javax.sql.DataSource;
 
 /**
- * <h1>MySQL Client</h1>
  * Provide facilities for querying MySQL or compatible databases
  * such as AWS Aurora or MariaDB. Custom properties are ignored.
  *

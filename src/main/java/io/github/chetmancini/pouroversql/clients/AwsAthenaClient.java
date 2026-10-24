@@ -20,7 +20,6 @@ import javax.sql.DataSource;
 import java.sql.DriverManager;
 
 /**
- * <h1>Athena Client</h1>
  * Provide facilities for querying AWS Athena
  *
  * The official AWS Athena JDBC driver is not published to Maven Central, so it is

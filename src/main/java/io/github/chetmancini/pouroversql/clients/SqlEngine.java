@@ -17,7 +17,6 @@ package io.github.chetmancini.pouroversql.clients;
 
 
 /**
- * <h1>SQLEngine</h1>
  * The type of database to connect to.
  */
 public enum SqlEngine {

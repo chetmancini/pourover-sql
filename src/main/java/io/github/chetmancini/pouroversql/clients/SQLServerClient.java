@@ -21,7 +21,6 @@ import io.github.chetmancini.pouroversql.ConnectionParams;
 import javax.sql.DataSource;
 
 /**
- * <h1>SQLServerClient</h1>
  * Client for SQLServer. Supported custom properties are listed on {@link ConnectionParams};
  * {@code encrypt} and {@code trustServerCertificate} default to {@code false}.
  */
