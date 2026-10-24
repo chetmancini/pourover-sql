@@ -16,8 +16,7 @@
 
 package io.github.chetmancini.pouroversql;
 
-import io.github.chetmancini.pouroversql.clients.*;
-import io.github.chetmancini.pouroversql.writers.*;
+import io.github.chetmancini.pouroversql.clients.SqlEngine;
 import org.apache.commons.cli.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
 
@@ -32,7 +32,8 @@ import static io.github.chetmancini.pouroversql.util.TextFormat.parseInteger;
 
 /**
  * <h1>ExtractorRunner</h1>
- *
+ * Legacy command-line entry point, minimally ported to the {@link Pourover} API.
+ * Replaced by the picocli CLI in Task 6.
  */
 public class ExtractorRunner {
 
@@ -116,28 +117,27 @@ public class ExtractorRunner {
         return sb.toString();
     }
 
-    private static SQLParams getSqlParams(CommandLine commandLine) {
+    private static ConnectionParams getConnectionParams(CommandLine commandLine) {
         String user = commandLine.getOptionValue("user");
         String host = commandLine.getOptionValue("host", "localhost");
         Integer port = parseInteger(commandLine.getOptionValue("port"));
         String database = commandLine.getOptionValue("database");
         String password = getPassword();
         Properties props = commandLine.getOptionProperties("custom");
-        return new SQLParams(host, port, user, password, database, props);
+        return new ConnectionParams(host, port, user, password, database, props);
     }
 
-    private static QueryParams getQueryParams(CommandLine commandLine) {
+    private static QueryOptions getQueryOptions(CommandLine commandLine) {
         Integer fetchSize = parseInteger(commandLine.getOptionValue("fetchsize"));
+        // KNOWN BUG kept for Task 6: the option is registered as "maxrows", so this is always null.
         Integer maxRows = parseInteger(commandLine.getOptionValue("maxRows"));
         Integer timeout = parseInteger(commandLine.getOptionValue("timeout"));
-        return new QueryParams(fetchSize, maxRows, timeout);
+        return QueryOptions.of(
+                fetchSize != null ? fetchSize : QueryOptions.DEFAULT_FETCH_SIZE, maxRows, timeout);
     }
 
-    private static FormattingParams getFormattingParams(CommandLine commandLine) {
-        String caseFormat = commandLine.getOptionValue("case");
-        FormattingParams params = new FormattingParams();
-        params.setKeyCaseFormat(caseFormat);
-        return params;
+    private static FormatOptions getFormatOptions(CommandLine commandLine) {
+        return new FormatOptions(KeyCase.fromName(commandLine.getOptionValue("case")));
     }
 
     public static void main(String[] args) {
@@ -146,20 +146,19 @@ public class ExtractorRunner {
         CommandLineParser parser = new DefaultParser();
         try {
             CommandLine line = parser.parse(getOptions(), args);
-            SQLParams sqlParams = getSqlParams(line);
-            FormattingParams formattingParams = getFormattingParams(line);
-            QueryParams queryParams = getQueryParams(line);
+            ConnectionParams connectionParams = getConnectionParams(line);
+            FormatOptions formatOptions = getFormatOptions(line);
+            QueryOptions queryOptions = getQueryOptions(line);
             SqlEngine engine = SqlEngine.byName(line.getOptionValue("type", "SQLSERVER"));
-            FileOutputFormat outputFormat = FileOutputFormat.valueOf(
-                    line.getOptionValue("format", "json").toUpperCase());
+            OutputFormat outputFormat = OutputFormat.fromName(line.getOptionValue("format", "json"));
 
             if (line.hasOption("dry")) {
-                sqlParams.logValues();
-                queryParams.logValues();
-                formattingParams.logValues();
+                logger.info(connectionParams.toString());
+                logger.info(queryOptions.toString());
+                logger.info(formatOptions.toString());
                 System.exit(0);
             }
-            SQLExtractor sqlExtractor = new SQLExtractor(engine, sqlParams, formattingParams);
+            Pourover pourover = Pourover.connect(engine, connectionParams);
             try {
                 String inputFilename = line.getOptionValue("sql");
                 String inputSql;
@@ -169,7 +168,7 @@ public class ExtractorRunner {
                     inputSql = readSqlFromStdIn();
                 }
                 String outputFile = line.getOptionValue("file", DEFAULT_OUTPUT_FILENAME);
-                sqlExtractor.queryToFile(inputSql, new File(outputFile), outputFormat, queryParams);
+                pourover.writeTo(inputSql, Path.of(outputFile), outputFormat, formatOptions, queryOptions);
             } catch (IOException e) {
                 e.printStackTrace();
             }

@@ -16,34 +16,12 @@
 
 package io.github.chetmancini.pouroversql.util;
 
-import io.github.chetmancini.pouroversql.writers.KeyCaseFormat;
-
-import java.util.function.Function;
-
 /**
  * Textformat
  *
  * Utility class for formatting text.
  */
 public class TextFormat {
-
-    /**
-     * Get a funnction to apply to keys based on a KeyCaseFormat
-     * @param keyCaseFormat the KeyCaseFormat to use
-     * @return Function to convert a key.
-     */
-    public static Function<String, String> getFunctionByKeyFormat(KeyCaseFormat keyCaseFormat) {
-        switch (keyCaseFormat) {
-            case CAMEL_CASE:
-                return TextFormat::toCamelCase;
-            case SNAKE_CASE:
-                return TextFormat::toSnakeCase;
-            case DEFAULT:
-                return Function.identity();
-            default:
-                return Function.identity();
-        }
-    }
 
     /**
      * Convert a string to CamelCase

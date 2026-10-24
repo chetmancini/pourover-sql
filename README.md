@@ -53,11 +53,15 @@ Javadoc: coming soon.
 ### Use as a library
 
 ```$java
-SQLParams params = new SQLParams(host, port, user, password, database)
-SQLExtractor extract = new SQLExtractor(engine, sqlParams);
+Pourover db = Pourover.connect(engine, new ConnectionParams(host, port, user, password, database));
 
-String query = "select * from table";
-List<Map<String, Object>> records = extract.queryAsList(query);
+List<Map<String, Object>> records = db.list("select * from table");
+
+try (RowStream rows = db.stream("select * from big_table")) {
+    rows.rows().forEach(row -> System.out.println(row));
+}
+
+db.writeTo("select * from table", Path.of("out.jsonl"), OutputFormat.JSONL);
 ```
 
 ### Use as a command line application

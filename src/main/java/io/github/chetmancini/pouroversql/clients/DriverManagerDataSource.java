@@ -36,19 +36,20 @@ final class DriverManagerDataSource implements DataSource {
 
     DriverManagerDataSource(String url, Properties properties) {
         this.url = url;
-        this.properties = properties;
+        this.properties = new Properties();
+        this.properties.putAll(properties);
     }
 
-    /** Builds a data source with optional user and password properties. */
-    static DriverManagerDataSource of(String url, String user, String password) {
-        Properties props = new Properties();
-        if (user != null) {
-            props.setProperty("user", user);
-        }
-        if (password != null) {
-            props.setProperty("password", password);
-        }
-        return new DriverManagerDataSource(url, props);
+    /** The JDBC URL. */
+    String url() {
+        return url;
+    }
+
+    /** A copy of the connection properties (includes credentials; never log it). */
+    Properties properties() {
+        Properties copy = new Properties();
+        copy.putAll(properties);
+        return copy;
     }
 
     @Override

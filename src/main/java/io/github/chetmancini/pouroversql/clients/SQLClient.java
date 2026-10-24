@@ -15,19 +15,18 @@ limitations under the License.
 
 package io.github.chetmancini.pouroversql.clients;
 
-import io.github.chetmancini.pouroversql.writers.RowHandler;
-
-import java.util.List;
-import java.util.Map;
+import javax.sql.DataSource;
 
 /**
  * SQLClient
+ * Builds a {@link DataSource} for one database engine from {@link io.github.chetmancini.pouroversql.ConnectionParams}.
+ * Query execution lives in {@link io.github.chetmancini.pouroversql.Pourover}.
  */
 public interface SQLClient {
 
-    void setQueryParams(QueryParams queryParams);
-
-    List<Map<String, Object>> queryAsList(String queryText);
-
-    int queryWithHandler(String queryText, RowHandler handler);
+    /**
+     * Creates a DataSource for this engine. Connections are opened lazily by the caller.
+     * @return a new DataSource
+     */
+    DataSource dataSource();
 }

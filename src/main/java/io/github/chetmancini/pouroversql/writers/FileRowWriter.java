@@ -17,14 +17,26 @@ package io.github.chetmancini.pouroversql.writers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 
+/**
+ * Base class for writers that print rows to a file or stream as UTF-8 text.
+ */
 public abstract class FileRowWriter extends AbstractRowWriter implements RowWriter {
 
     private final Logger logger = LoggerFactory.getLogger(FileRowWriter.class);
 
-    static String ENCODING = "UTF-8";
+    static final String ENCODING = "UTF-8";
 
     protected PrintWriter writer = null;
 
@@ -39,21 +51,30 @@ public abstract class FileRowWriter extends AbstractRowWriter implements RowWrit
      * @param outputFilename the file name to write to.
      */
     public void open(String outputFilename) {
-        this.open(new File(outputFilename));
+        this.open(Path.of(outputFilename));
     }
 
     /**
-     * Open an output file for writing
+     * Open an output file for writing.
      * @param outputFile the output file to open.
      */
     public void open(File outputFile) {
+        this.open(outputFile.toPath());
+    }
+
+    /**
+     * Open an output file for writing, creating or truncating it.
+     * @param outputFile the output file to open.
+     * @throws UncheckedIOException if the file cannot be opened.
+     */
+    public void open(Path outputFile) {
         try {
-            this.writer = new PrintWriter(outputFile, ENCODING);
-            logger.info("Opening file: " + outputFile.getName());
-            this.postOpenHook();
-        } catch (FileNotFoundException | UnsupportedEncodingException e) {
-            e.printStackTrace();
+            this.writer = new PrintWriter(Files.newBufferedWriter(outputFile, StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            throw new UncheckedIOException("Cannot open " + outputFile + " for writing", e);
         }
+        logger.info("Opening file: " + outputFile.getFileName());
+        this.postOpenHook();
     }
 
     /**
@@ -61,7 +82,7 @@ public abstract class FileRowWriter extends AbstractRowWriter implements RowWrit
      * @param outputStream the OutputStream to open.
      */
     public void open(OutputStream outputStream) {
-        this.writer = new PrintWriter(outputStream);
+        this.writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8)));
         this.postOpenHook();
     }
 
@@ -80,21 +101,23 @@ public abstract class FileRowWriter extends AbstractRowWriter implements RowWrit
 
     }
 
-    private void flush() {
-        if (this.writer != null) {
-            this.writer.flush();
-        }
-    }
-
     /**
-     * Close out the writer safely.
+     * Flush and close the writer safely.
+     * @throws UncheckedIOException if buffered output could not be written.
      */
+    @Override
     public void close() {
-        this.flush();
-        if (this.writer != null) {
-            this.writer.close();
-        }
+        PrintWriter current = this.writer;
         this.writer = null;
+        if (current != null) {
+            current.flush();
+            boolean failed = current.checkError();
+            current.close();
+            if (failed) {
+                this.postCloseHook();
+                throw new UncheckedIOException(new IOException("Error writing output"));
+            }
+        }
         this.postCloseHook();
     }
 }

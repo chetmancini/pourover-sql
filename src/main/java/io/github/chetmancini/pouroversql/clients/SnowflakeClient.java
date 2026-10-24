@@ -15,12 +15,15 @@ limitations under the License.
 
 package io.github.chetmancini.pouroversql.clients;
 
+import io.github.chetmancini.pouroversql.ConnectionParams;
+
 import javax.sql.DataSource;
 import java.util.Properties;
 
 /**
- * <h1>PostgreSQL Client</h1>
- * Provide facilities for querying Snowflake.
+ * <h1>Snowflake Client</h1>
+ * Provide facilities for querying Snowflake. Custom properties (for example
+ * {@code warehouse}, {@code role}, {@code schema}) are passed to the driver.
  *
  * This client is in DEVELOPMENT and has not yet been tested in production.
  *
@@ -31,35 +34,20 @@ public class SnowflakeClient extends AbstractSQLClient {
 
     /**
      * Constructor
-     * @param params SQLParams for the connection
+     * @param params connection settings.
      */
-    SnowflakeClient(SQLParams params) {
+    SnowflakeClient(ConnectionParams params) {
         super(params);
-    }
-
-    /**
-     * Constructor
-     * @param params SQLParams for the connection
-     * @param queryParams QueryParams to default to future queries.
-     */
-    SnowflakeClient(SQLParams params, QueryParams queryParams) {
-        super(params, queryParams);
     }
 
     @Override
     protected DataSource initDataSource() {
-        Properties props = new Properties();
-        if (this.params.getUser() != null) {
-            props.setProperty("user", this.params.getUser());
+        Properties props = this.driverProperties();
+        if (this.params.database() != null) {
+            props.setProperty("db", this.params.database());
         }
-        if (this.params.getPassword() != null) {
-            props.setProperty("password", this.params.getPassword());
-        }
-        if (this.params.getDatabase() != null) {
-            props.setProperty("db", this.params.getDatabase());
-        }
-        String host = this.params.getHost();
-        String port = this.params.getPort() != null ? ":" + this.params.getPort() : "";
+        String host = this.params.host();
+        String port = this.params.port() != null ? ":" + this.params.port() : "";
         return new DriverManagerDataSource("jdbc:snowflake://" + host + port, props);
     }
 

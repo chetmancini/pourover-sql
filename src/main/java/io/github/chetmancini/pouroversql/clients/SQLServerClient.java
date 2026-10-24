@@ -15,13 +15,15 @@ limitations under the License.
 
 package io.github.chetmancini.pouroversql.clients;
 
-import com.microsoft.sqlserver.jdbc.*;
+import com.microsoft.sqlserver.jdbc.SQLServerDataSource;
+import io.github.chetmancini.pouroversql.ConnectionParams;
 
 import javax.sql.DataSource;
 
 /**
  * <h1>SQLServerClient</h1>
- * Client for SQLServer
+ * Client for SQLServer. Supported custom properties are listed on {@link ConnectionParams};
+ * {@code encrypt} and {@code trustServerCertificate} default to {@code false}.
  */
 public class SQLServerClient extends AbstractSQLClient {
 
@@ -30,73 +32,66 @@ public class SQLServerClient extends AbstractSQLClient {
 
     /**
      * Constructor
-     * @param params the SQLParams for the connection.
+     * @param params connection settings.
      */
-    public SQLServerClient(SQLParams params) {
+    public SQLServerClient(ConnectionParams params) {
         super(params);
     }
 
-    /**
-     * Constructor.
-     * @param params the SQLParams for the connection
-     * @param queryParams the params for the queries.
-     */
-    public SQLServerClient(SQLParams params, QueryParams queryParams) {
-        super(params, queryParams);
+    private boolean flag(String key) {
+        Boolean value = this.booleanProperty(key);
+        return value != null && value;
     }
 
     @Override
     public DataSource initDataSource() {
-        SQLServerSQLParams params = SQLServerSQLParams.initEngineParams(this.params);
         SQLServerDataSource ds = new SQLServerDataSource();
-        ds.setUser(params.getUser());
-        ds.setPassword(params.getPassword());
-        ds.setServerName(params.getHost(DEFAULT_HOST));
-        ds.setPortNumber(params.getPort(DEFAULT_PORT));
-        ds.setDatabaseName(params.getDatabase());
+        ds.setUser(this.params.user());
+        ds.setPassword(this.params.password());
+        ds.setServerName(this.host(DEFAULT_HOST));
+        ds.setPortNumber(this.port(DEFAULT_PORT));
+        ds.setDatabaseName(this.params.database());
 
-        if (params.getEncrypt() != null) {
-            ds.setEncrypt(params.getEncrypt());
+        // String overload: setEncrypt(boolean) is deprecated for removal in mssql-jdbc.
+        ds.setEncrypt(Boolean.toString(this.flag("encrypt")));
+        ds.setTrustServerCertificate(this.flag("trustServerCertificate"));
+        if (this.stringProperty("trustStore") != null) {
+            ds.setTrustStore(this.stringProperty("trustStore"));
         }
-        if (params.getTrustServerCertificate() != null) {
-            ds.setTrustServerCertificate(params.getTrustServerCertificate());
+        if (this.stringProperty("trustStorePassword") != null) {
+            ds.setTrustStorePassword(this.stringProperty("trustStorePassword"));
         }
-        if (params.getTrustStore() != null) {
-            ds.setTrustStore(params.getTrustStore());
+        if (this.stringProperty("trustStoreType") != null) {
+            ds.setTrustStoreType(this.stringProperty("trustStoreType"));
         }
-        if (params.getTrustStorePassword() != null) {
-            ds.setTrustStorePassword(params.getTrustStorePassword());
+        if (this.stringProperty("accessToken") != null) {
+            ds.setAccessToken(this.stringProperty("accessToken"));
         }
-        if (params.getTrustStoreType() != null) {
-            ds.setTrustStoreType(params.getTrustStoreType());
+        if (this.stringProperty("authentication") != null) {
+            ds.setAuthentication(this.stringProperty("authentication"));
         }
-        if (params.getAccessToken() != null) {
-            ds.setAccessToken(params.getAccessToken());
+        if (this.stringProperty("authenticationScheme") != null) {
+            ds.setAuthenticationScheme(this.stringProperty("authenticationScheme"));
         }
-        if (params.getAuthentication() != null) {
-            ds.setAuthentication(params.getAuthentication());
+        if (this.stringProperty("columnEncryptionSetting") != null) {
+            ds.setColumnEncryptionSetting(this.stringProperty("columnEncryptionSetting"));
         }
-        if (params.getAuthenticationScheme() != null) {
-            ds.setAuthenticationScheme(params.getAuthenticationScheme());
+        if (this.stringProperty("failoverPartner") != null) {
+            ds.setFailoverPartner(this.stringProperty("failoverPartner"));
         }
-        if (params.getColumnEncryptionSetting() != null) {
-            ds.setColumnEncryptionSetting(params.getColumnEncryptionSetting());
+        Boolean integratedSecurity = this.booleanProperty("integratedSecurity");
+        if (integratedSecurity != null) {
+            ds.setIntegratedSecurity(integratedSecurity);
         }
-        if (params.getFailoverPartner() != null) {
-            ds.setFailoverPartner(params.getFailoverPartner());
-        }
-        if (params.getIntegratedSecurity() != null) {
-            ds.setIntegratedSecurity(params.getIntegratedSecurity());
-        }
-        if (params.getHostNameInCertificate() != null) {
-            ds.setHostNameInCertificate(params.getHostNameInCertificate());
+        if (this.stringProperty("hostNameInCertificate") != null) {
+            ds.setHostNameInCertificate(this.stringProperty("hostNameInCertificate"));
         }
         return ds;
     }
 
     @Override
     protected String getDriverName() {
-        return "com.microsoft.sqlserver.jdbc.Driver";
+        return "com.microsoft.sqlserver.jdbc.SQLServerDriver";
     }
 
 }

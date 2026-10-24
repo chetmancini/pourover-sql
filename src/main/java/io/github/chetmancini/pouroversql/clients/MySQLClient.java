@@ -16,12 +16,14 @@ limitations under the License.
 package io.github.chetmancini.pouroversql.clients;
 
 import com.mysql.cj.jdbc.MysqlDataSource;
+import io.github.chetmancini.pouroversql.ConnectionParams;
+
 import javax.sql.DataSource;
 
 /**
  * <h1>MySQL Client</h1>
  * Provide facilities for querying MySQL or compatible databases
- * such as AWS Aurora or MariaDB
+ * such as AWS Aurora or MariaDB. Custom properties are ignored.
  *
  * @author  Chet Mancini
  * @since   2019-03-31
@@ -35,27 +37,18 @@ public class MySQLClient extends AbstractSQLClient {
      * Constructor
      * @param params the parameters to use for the connection.
      */
-    public MySQLClient(SQLParams params) {
+    public MySQLClient(ConnectionParams params) {
         super(params);
-    }
-
-    /**
-     * Constructor.
-     * @param params the params for the connection
-     * @param queryParams the params for each query./
-     */
-    public MySQLClient(SQLParams params, QueryParams queryParams) {
-        super(params, queryParams);
     }
 
     @Override
     protected DataSource initDataSource() {
         MysqlDataSource ds = new MysqlDataSource();
-        ds.setUser(this.params.getUser());
-        ds.setServerName(this.params.getHost(DEFAULT_HOST));
-        ds.setPort(this.params.getPort(DEFAULT_PORT));
-        ds.setPassword(this.params.getPassword());
-        ds.setDatabaseName(this.params.getDatabase());
+        ds.setUser(this.params.user());
+        ds.setServerName(this.host(DEFAULT_HOST));
+        ds.setPort(this.port(DEFAULT_PORT));
+        ds.setPassword(this.params.password());
+        ds.setDatabaseName(this.params.database());
         return ds;
     }
 

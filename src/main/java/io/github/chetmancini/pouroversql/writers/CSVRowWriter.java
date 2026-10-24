@@ -16,21 +16,22 @@
 
 package io.github.chetmancini.pouroversql.writers;
 
+import io.github.chetmancini.pouroversql.RowFormatter;
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * <h1>CSVRowWriter</h1>
- * CSVRowWriter is a type of writer that outputs to CSV.
+ * CSVRowWriter is a type of writer that outputs to CSV. Quoting, null and temporal
+ * rendering follow {@link RowFormatter}.
  */
 public class CSVRowWriter extends FileRowWriter {
 
-    private static String QUOTE = "\"";
-
     private List<String> orderedKeys;
 
-    private CharSequence delimiter;
+    private final CharSequence delimiter;
 
     private boolean headersWritten;
 
@@ -65,50 +66,23 @@ public class CSVRowWriter extends FileRowWriter {
     @Override
     protected void postCloseHook() {
         this.headersWritten = false;
+        this.orderedKeys = null;
     }
 
     @Override
     protected void postOpenHook() {
         this.headersWritten = false;
+        this.orderedKeys = null;
     }
 
     private void writeHeadersOnce(Map<String, Object> row) {
+        if (this.orderedKeys == null) {
+            this.orderedKeys = new ArrayList<>(row.keySet());
+        }
         if (!this.headersWritten && this.shouldWriteHeaders) {
-            this.orderedKeys = row.keySet()
-                    .stream()
-                    .map(Object::toString)
-                    .collect(Collectors.toList());
-            this.writer.println(String.join(this.delimiter, this.orderedKeys));
+            this.writer.println(RowFormatter.csvHeader(this.orderedKeys, this.delimiter));
             this.headersWritten = true;
         }
-    }
-
-    private String quoteString(String input) {
-        return QUOTE + input.replace(QUOTE, "\"\"") + QUOTE;
-    }
-
-    private String handleValue(Object inputObj) {
-        if (inputObj == null) {
-            return "";
-        } else if (! (inputObj instanceof String)) {
-            return inputObj.toString();
-        } else {
-            String inputStr = (String) inputObj;
-            if (inputStr.contains(System.lineSeparator())
-                    || inputStr.contains(this.delimiter)
-                    || inputStr.contains(QUOTE)) {
-                return quoteString(inputStr);
-            } else {
-                return inputStr;
-            }
-        }
-    }
-
-    private String rowToString(Map<String, Object> row) {
-        return this.orderedKeys.stream()
-                .map(row::get)
-                .map(this::handleValue)
-                .collect(Collectors.joining(this.delimiter));
     }
 
     /**
@@ -118,7 +92,11 @@ public class CSVRowWriter extends FileRowWriter {
     @Override
     public void writeRow(Map<String, Object> row) {
         this.writeHeadersOnce(row);
-        this.writer.println(rowToString(row));
+        List<Object> values = new ArrayList<>(this.orderedKeys.size());
+        for (String key : this.orderedKeys) {
+            values.add(row.get(key));
+        }
+        this.writer.println(RowFormatter.csvRow(values, this.delimiter));
     }
 
 }

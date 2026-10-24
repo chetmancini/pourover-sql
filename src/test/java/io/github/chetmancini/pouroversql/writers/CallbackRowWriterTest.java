@@ -22,7 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -38,10 +38,7 @@ public class CallbackRowWriterTest {
 
         AtomicInteger invocationCount = new AtomicInteger();
 
-        Function<Map<String, Object>, ?> callback = (Function<Map<String, Object>, Object>) stringObjectMap -> {
-            invocationCount.incrementAndGet();
-            return null;
-        };
+        Consumer<Map<String, Object>> callback = row -> invocationCount.incrementAndGet();
 
         List<Map<String, Object>> input = Arrays.asList(test1, test2);
         CallbackRowWriter subject = new CallbackRowWriter(callback);

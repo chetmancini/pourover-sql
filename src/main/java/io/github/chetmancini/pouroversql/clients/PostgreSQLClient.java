@@ -15,13 +15,15 @@ limitations under the License.
 
 package io.github.chetmancini.pouroversql.clients;
 
+import io.github.chetmancini.pouroversql.ConnectionParams;
 import org.postgresql.ds.PGSimpleDataSource;
 
 import javax.sql.DataSource;
 
 /**
  * <h1>PostgreSQLClient</h1>
- * Provide facilities for querying to postgres.
+ * Provide facilities for querying to postgres. Supported custom properties are listed
+ * on {@link ConnectionParams}; connections are read-only unless {@code readOnly=false}.
  *
  * @author  Chet Mancini
  * @since   2019-03-31
@@ -33,60 +35,48 @@ public class PostgreSQLClient extends AbstractSQLClient {
 
     /**
      * Constructor
-     * @param params SQLParams for the connection.
+     * @param params connection settings.
      */
-    public PostgreSQLClient(SQLParams params) {
+    public PostgreSQLClient(ConnectionParams params) {
         super(params);
-    }
-
-    /**
-     * Constructor
-     * @param params the SQLParams for the connection.
-     * @param queryParams the default params for each query.
-     */
-    public PostgreSQLClient(SQLParams params, QueryParams queryParams) {
-        super(params, queryParams);
     }
 
     @Override
     public DataSource initDataSource() {
-        /*
-        TODO can use connection pooling in future.
-         */
-        PostgreSQLSQLParams postgresParams = PostgreSQLSQLParams.initEngineParams(this.params);
         PGSimpleDataSource ds = new PGSimpleDataSource();
-        ds.setUser(postgresParams.getUser());
-        ds.setServerName(postgresParams.getHost(DEFAULT_HOST));
-        ds.setPassword(postgresParams.getPassword());
-        ds.setDatabaseName(postgresParams.getDatabase());
-        ds.setPortNumber(postgresParams.getPort(DEFAULT_PORT));
-        ds.setReadOnly(this.queryParams.getReadOnly());
-        ds.setDefaultRowFetchSize(this.queryParams.getFetchSize());
+        ds.setUser(this.params.user());
+        ds.setServerNames(new String[] {this.host(DEFAULT_HOST)});
+        ds.setPassword(this.params.password());
+        ds.setDatabaseName(this.params.database());
+        ds.setPortNumbers(new int[] {this.port(DEFAULT_PORT)});
+        Boolean readOnly = this.booleanProperty("readOnly");
+        ds.setReadOnly(readOnly == null || readOnly);
 
-        // Custom params
-        if (postgresParams.getSsl() != null) {
-            ds.setSsl(postgresParams.getSsl());
+        Boolean ssl = this.booleanProperty("ssl");
+        if (ssl != null) {
+            ds.setSsl(ssl);
         }
-        if (postgresParams.getBinaryTransfer() != null) {
-            ds.setBinaryTransfer(postgresParams.getBinaryTransfer());
+        Boolean binaryTransfer = this.booleanProperty("binaryTransfer");
+        if (binaryTransfer != null) {
+            ds.setBinaryTransfer(binaryTransfer);
         }
-        if (postgresParams.getKerberosServerName() != null) {
-            ds.setKerberosServerName(postgresParams.getKerberosServerName());
+        if (this.stringProperty("kerberosServerName") != null) {
+            ds.setKerberosServerName(this.stringProperty("kerberosServerName"));
         }
-        if (postgresParams.getSslCert() != null) {
-            ds.setSslCert(postgresParams.getSslCert());
+        if (this.stringProperty("sslCert") != null) {
+            ds.setSslCert(this.stringProperty("sslCert"));
         }
-        if (postgresParams.getSslKey() != null) {
-            ds.setSslKey(postgresParams.getSslKey());
+        if (this.stringProperty("sslKey") != null) {
+            ds.setSslKey(this.stringProperty("sslKey"));
         }
-        if (postgresParams.getSslMode() != null) {
-            ds.setSslMode(postgresParams.getSslMode());
+        if (this.stringProperty("sslMode") != null) {
+            ds.setSslMode(this.stringProperty("sslMode"));
         }
-        if (postgresParams.getSslPassword() != null) {
-            ds.setSslPassword(postgresParams.getSslPassword());
+        if (this.stringProperty("sslPassword") != null) {
+            ds.setSslPassword(this.stringProperty("sslPassword"));
         }
-        if (postgresParams.getSslRootCert() != null) {
-            ds.setSslRootCert(postgresParams.getSslRootCert());
+        if (this.stringProperty("sslRootCert") != null) {
+            ds.setSslRootCert(this.stringProperty("sslRootCert"));
         }
         return ds;
     }

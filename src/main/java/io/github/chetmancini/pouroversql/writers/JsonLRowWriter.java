@@ -13,42 +13,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
  */
 package io.github.chetmancini.pouroversql.writers;
-import com.google.gson.*;
+
+import io.github.chetmancini.pouroversql.FormatOptions;
+import io.github.chetmancini.pouroversql.RowFormatter;
+
 import java.util.Map;
 
 /**
  * JsonLRowWriter
- * A file writer that outputs jsonl files.
- * Leverages Google's GSON library to flexibly and quickly serialize json.
+ * A file writer that outputs jsonl files, one {@link RowFormatter#jsonl} object per line.
+ * Keys are written as given; apply key case before handing rows to this writer.
  */
 public class JsonLRowWriter extends FileRowWriter {
-
-    static String ENCODING = "UTF-8";
-
-    private Gson gson;
 
     /**
      * Base Constructor
      * Requires open() be called after.
      */
     public JsonLRowWriter() {
-        GsonBuilder gsonBuilder = new GsonBuilder();
-        gsonBuilder.serializeNulls();
-        this.gson = gsonBuilder.create();
-    }
-
-    /**
-     * Convenience constructor
-     *
-     * @param outputFilename the name of the output file
-     */
-    JsonLRowWriter(String outputFilename) {
-        this();
-        this.open(outputFilename);
-    }
-
-    private String toJson(Map<String, Object> input) {
-        return this.gson.toJson(input);
     }
 
     /**
@@ -57,7 +39,7 @@ public class JsonLRowWriter extends FileRowWriter {
      */
     @Override
     public void writeRow(Map<String, Object> row) {
-        this.writer.println(this.toJson(row));
+        this.writer.println(RowFormatter.jsonl(row, FormatOptions.defaults()));
     }
 
 }

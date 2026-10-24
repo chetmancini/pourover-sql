@@ -15,10 +15,11 @@ limitations under the License.
 
 package io.github.chetmancini.pouroversql.clients;
 
+import io.github.chetmancini.pouroversql.ConnectionParams;
 
 /**
  * <h1>Redshift Client</h1>
- * Provide facilities for querying to Redshift
+ * Provide facilities for querying to Redshift. Custom properties are passed to the driver.
  *
  * @author  Chet Mancini
  * @since   2019-03-31
@@ -29,21 +30,21 @@ public class RedshiftClient extends AbstractSQLClient {
 
     /**
      * Constructor
-     * @param params SQLParams for the connection.
+     * @param params connection settings.
      */
-    public RedshiftClient(SQLParams params) {
+    public RedshiftClient(ConnectionParams params) {
         super(params);
     }
 
     private String getRedshiftURL() {
         return String.format("jdbc:redshift://%s:%s/%s",
-                this.params.getHost(), this.params.getPort(DEFAULT_PORT), this.params.getDatabase()
+                this.params.host(), this.port(DEFAULT_PORT), this.params.database()
         );
     }
 
     @Override
     public javax.sql.DataSource initDataSource() {
-        return DriverManagerDataSource.of(this.getRedshiftURL(), params.getUser(), params.getPassword());
+        return new DriverManagerDataSource(this.getRedshiftURL(), this.driverProperties());
     }
 
     @Override

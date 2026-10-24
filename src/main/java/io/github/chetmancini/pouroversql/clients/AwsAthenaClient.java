@@ -14,6 +14,8 @@ limitations under the License.
  */
 package io.github.chetmancini.pouroversql.clients;
 
+import io.github.chetmancini.pouroversql.ConnectionParams;
+
 import javax.sql.DataSource;
 import java.sql.DriverManager;
 
@@ -23,7 +25,8 @@ import java.sql.DriverManager;
  *
  * The official AWS Athena JDBC driver is not published to Maven Central, so it is
  * user-supplied on the runtime classpath. The connection is made through
- * {@link DriverManager} with the JDBC URL given as the host.
+ * {@link DriverManager} with the JDBC URL given as the host; custom properties are
+ * passed to the driver.
  *
  * @author  Chet Mancini
  * @version 1.0
@@ -33,16 +36,15 @@ public class AwsAthenaClient extends AbstractSQLClient {
 
     /**
      * Constructor
-     * @param params SQLParams the params for the connection.
+     * @param params the params for the connection; host is the JDBC URL.
      */
-    public AwsAthenaClient(SQLParams params) {
+    public AwsAthenaClient(ConnectionParams params) {
         super(params);
     }
 
     @Override
     protected DataSource initDataSource() {
-        return DriverManagerDataSource.of(
-                this.params.getHost(), this.params.getUser(), this.params.getPassword());
+        return new DriverManagerDataSource(this.params.host(), this.driverProperties());
     }
 
     @Override

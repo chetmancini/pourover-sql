@@ -16,12 +16,12 @@ limitations under the License.
 package io.github.chetmancini.pouroversql.clients;
 
 import com.informix.jdbcx.IfxDataSource;
-import com.informix.util.InformixUrl;
+import io.github.chetmancini.pouroversql.ConnectionParams;
 
 import javax.sql.DataSource;
 
 /**
- * Informix SQL Client
+ * Informix SQL Client. Custom properties are ignored.
  */
 public class InformixSQLClient extends AbstractSQLClient {
 
@@ -31,20 +31,20 @@ public class InformixSQLClient extends AbstractSQLClient {
 
     /**
      * Constructor
-     * @param params SQLParams to setup connection.
+     * @param params connection settings.
      */
-    InformixSQLClient(SQLParams params) {
+    InformixSQLClient(ConnectionParams params) {
         super(params);
     }
 
     @Override
     protected DataSource initDataSource() {
         IfxDataSource ifxDataSource = new IfxDataSource();
-        ifxDataSource.setDatabaseName(this.params.getDatabase());
-        ifxDataSource.setUser(this.params.getUser());
-        ifxDataSource.setPassword(this.params.getPassword());
-        ifxDataSource.setIfxIFXHOST(this.params.getHost(DEFAULT_HOST));
-        ifxDataSource.setPortNumber(this.params.getPort(DEFAULT_PORT));
+        ifxDataSource.setDatabaseName(this.params.database());
+        ifxDataSource.setUser(this.params.user());
+        ifxDataSource.setPassword(this.params.password());
+        ifxDataSource.setIfxIFXHOST(this.host(DEFAULT_HOST));
+        ifxDataSource.setPortNumber(this.port(DEFAULT_PORT));
         return ifxDataSource;
     }
 

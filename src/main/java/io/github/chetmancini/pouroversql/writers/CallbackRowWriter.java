@@ -17,27 +17,28 @@
 package io.github.chetmancini.pouroversql.writers;
 
 import java.util.Map;
-import java.util.function.Function;
+import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * <h1>CallbackRowWriter</h1>
- * A RowWriter that 'writes' rows by invoking a provided callback function instead of a file like output.
+ * A RowWriter that 'writes' rows by passing each one to a consumer instead of a file like output.
  */
 public class CallbackRowWriter extends AbstractRowWriter implements RowWriter {
 
-    private Function<Map<String, Object>, ?> callback;
+    private final Consumer<Map<String, Object>> callback;
 
     /**
      * Constructor
-     * @param callback the function to invoke on each row.
+     * @param callback the consumer to invoke on each row.
      */
-    public CallbackRowWriter(Function<Map<String, Object>, ?> callback) {
-        this.callback = callback;
+    public CallbackRowWriter(Consumer<Map<String, Object>> callback) {
+        this.callback = Objects.requireNonNull(callback, "callback");
     }
 
     @Override
     public void writeRow(Map<String, Object> row) {
-        this.callback.apply(row);
+        this.callback.accept(row);
     }
 
     @Override

@@ -14,48 +14,32 @@ limitations under the License.
  */
 package io.github.chetmancini.pouroversql.clients;
 
+import io.github.chetmancini.pouroversql.ConnectionParams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import io.github.chetmancini.pouroversql.util.ResultSets;
-import io.github.chetmancini.pouroversql.writers.RowHandler;
 
 import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Properties;
 
 /**
  * <h1>AbstractSQLClient</h1>
- * Subclass for all different engine types
+ * Subclass for all different engine types. Each subclass turns {@link ConnectionParams}
+ * into an engine-specific {@link DataSource}.
  */
 public abstract class AbstractSQLClient implements SQLClient {
 
-    protected SQLParams params;
-    protected QueryParams queryParams;
+    private static final Logger logger = LoggerFactory.getLogger(AbstractSQLClient.class);
 
-    private final Logger logger = LoggerFactory.getLogger(SQLClient.class);
+    protected final ConnectionParams params;
 
     /**
      * Constructor
-     * @param params SQLParams to setup the connection.
+     * @param params connection settings.
      */
-    AbstractSQLClient(SQLParams params) {
-        this.params = params;
-        this.queryParams = QueryParams.getDefaultQueryParams();
-    }
-
-    /**
-     * Constructor with a default set of queryparams for future queries
-     * @param params SQLParams to setup the connection.
-     * @param queryParams QueryParams for future queries.
-     */
-    AbstractSQLClient(SQLParams params, QueryParams queryParams) {
-        this.params = params;
-        this.queryParams = queryParams;
+    AbstractSQLClient(ConnectionParams params) {
+        this.params = Objects.requireNonNull(params, "params");
     }
 
     abstract protected DataSource initDataSource();
@@ -63,13 +47,9 @@ public abstract class AbstractSQLClient implements SQLClient {
     abstract protected String getDriverName();
 
     @Override
-    public void setQueryParams(QueryParams queryParams) {
-        this.queryParams = queryParams;
-    }
-
-    @FunctionalInterface
-    private interface ResultSetFunction<T> {
-        T apply(ResultSet rs) throws SQLException;
+    public DataSource dataSource() {
+        this.loadDriver();
+        return this.initDataSource();
     }
 
     /**
@@ -84,61 +64,47 @@ public abstract class AbstractSQLClient implements SQLClient {
         }
     }
 
-    /**
-     * Runs a query with fetch size, max rows and timeout from the current QueryParams,
-     * closing the connection, statement and result set.
-     */
-    private <T> T execute(String queryText, ResultSetFunction<T> mapper) throws SQLException {
-        if (queryText == null) {
-            throw new SQLException("Null SQL statement");
-        }
-        this.loadDriver();
-        DataSource ds = this.initDataSource();
-        try (Connection conn = ds.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(queryText)) {
-            if (this.queryParams.getFetchSize() != null) {
-                stmt.setFetchSize(this.queryParams.getFetchSize());
-            }
-            if (this.queryParams.getTimeout() != null) {
-                stmt.setQueryTimeout(this.queryParams.getTimeout());
-            }
-            if (this.queryParams.getMaxRows() != null) {
-                stmt.setMaxRows(this.queryParams.getMaxRows());
-            }
-            try (ResultSet rs = stmt.executeQuery()) {
-                return mapper.apply(rs);
-            }
-        }
+    protected String host(String defaultHost) {
+        return params.host() != null ? params.host() : defaultHost;
     }
 
-    @Override
-    public List<Map<String, Object>> queryAsList(String queryText) {
-        logger.debug("Querying for: " + queryText);
-        try {
-            return this.execute(queryText, rs -> {
-                List<Map<String, Object>> rows = new ArrayList<>();
-                while (rs.next()) {
-                    rows.add(ResultSets.toMap(rs));
-                }
-                return rows;
-            });
-        } catch (Exception e) {
-            logger.error(e.getMessage());
-            e.printStackTrace();
+    protected int port(int defaultPort) {
+        return params.port() != null ? params.port() : defaultPort;
+    }
+
+    protected String stringProperty(String key) {
+        return params.properties().getProperty(key);
+    }
+
+    protected Boolean booleanProperty(String key) {
+        return toBooleanObject(params.properties().getProperty(key));
+    }
+
+    /**
+     * Builds driver connection properties: every custom property, then user and password.
+     */
+    protected Properties driverProperties() {
+        Properties props = params.properties();
+        if (params.user() != null) {
+            props.setProperty("user", params.user());
+        }
+        if (params.password() != null) {
+            props.setProperty("password", params.password());
+        }
+        return props;
+    }
+
+    private static Boolean toBooleanObject(String value) {
+        if (value == null) {
             return null;
         }
-    }
-
-    @Override
-    public int queryWithHandler(String queryText, RowHandler handler) {
-        logger.debug("Querying for: " + queryText);
-        try {
-            return this.execute(queryText, handler::handle);
-        } catch (Exception e) {
-            logger.error(e.getMessage());
-            e.printStackTrace();
-            return -1;
+        switch (value.trim().toLowerCase(Locale.ROOT)) {
+            case "true": case "t": case "yes": case "y": case "on": case "1":
+                return Boolean.TRUE;
+            case "false": case "f": case "no": case "n": case "off": case "0":
+                return Boolean.FALSE;
+            default:
+                return null;
         }
     }
-
 }

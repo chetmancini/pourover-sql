@@ -21,7 +21,7 @@ import java.util.Map;
  * RowWriter
  * Provides an interface to control writing out query results to various outputs.
  */
-public interface RowWriter {
+public interface RowWriter extends AutoCloseable {
 
     /**
      * Write a row out.
@@ -40,5 +40,6 @@ public interface RowWriter {
      * Should be called after all rows written.
      * Hook to perform all cleanup on the writer.
      */
+    @Override
     void close();
 }

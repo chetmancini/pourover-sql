@@ -14,62 +14,42 @@ limitations under the License.
  */
 package io.github.chetmancini.pouroversql.clients;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.github.chetmancini.pouroversql.ConnectionParams;
+
+import java.util.Objects;
 
 /**
  * ClientFactory
  *
  * Factory class to build the correct type of SQLClient based on input.
  */
-public class ClientFactory {
-    private static final Logger logger = LoggerFactory.getLogger(ClientFactory.class);
+public final class ClientFactory {
 
-    public static SQLClient makeSQLClient(String sqlType, SQLParams params) {
-        SqlEngine engine = SqlEngine.byName(sqlType);
-        return ClientFactory.makeSQLClient(engine, params);
+    private ClientFactory() {
     }
 
     /**
      * Factory method to build a client by engine type.
      * @param engine the type of client to build
-     * @param params SQLParams to put in the client
-     * @return SQLClient
+     * @param params connection settings
+     * @return SQLClient for the engine
+     * @throws IllegalArgumentException for engines without a built-in client (ORACLE, BIGQUERY)
      */
-    public static SQLClient makeSQLClient(SqlEngine engine, SQLParams params) {
-        SQLClient client = null;
-        switch (engine) {
-            case ATHENA:
-                client = new AwsAthenaClient(params);
-                break;
-            case SQLSERVER:
-                client = new SQLServerClient(params);
-                break;
-            case MYSQL:
-                client = new MySQLClient(params);
-                break;
-            case POSTGRESQL:
-                client = new PostgreSQLClient(params);
-                break;
-            case REDSHIFT:
-                client = new RedshiftClient(params);
-                break;
-            case ORACLE:
-                logger.error("Oracle uses logins to retrieve artifacts. Customize your own.");
-                break;
-            case INFORMIX:
-                client = new InformixSQLClient(params);
-                break;
-            case SNOWFLAKE:
-                client = new SnowflakeClient(params);
-                break;
-            case BIGQUERY:
-                logger.error("Not supported yet.");
-                break;
-            default:
-                logger.error("DB type not supported.");
-                break;
-        }
-        return client;
+    public static SQLClient makeSQLClient(SqlEngine engine, ConnectionParams params) {
+        Objects.requireNonNull(engine, "engine");
+        Objects.requireNonNull(params, "params");
+        return switch (engine) {
+            case ATHENA -> new AwsAthenaClient(params);
+            case SQLSERVER -> new SQLServerClient(params);
+            case MYSQL -> new MySQLClient(params);
+            case POSTGRESQL -> new PostgreSQLClient(params);
+            case REDSHIFT -> new RedshiftClient(params);
+            case INFORMIX -> new InformixSQLClient(params);
+            case SNOWFLAKE -> new SnowflakeClient(params);
+            case ORACLE -> throw new IllegalArgumentException(
+                    "Oracle is not supported: its driver requires a login to download. Use Pourover.of(DataSource).");
+            case BIGQUERY -> throw new IllegalArgumentException(
+                    "BigQuery is not supported yet. Use Pourover.of(DataSource).");
+        };
     }
 }
