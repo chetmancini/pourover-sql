@@ -1,8 +1,8 @@
 package com.simondata.pouroversql.clients;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import static junit.framework.TestCase.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class QueryParamsTest {
 

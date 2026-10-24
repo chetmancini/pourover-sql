@@ -15,11 +15,11 @@ limitations under the License.
 
 package com.simondata.pouroversql.util;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import static com.simondata.pouroversql.util.TextFormat.toCamelCase;
 import static com.simondata.pouroversql.util.TextFormat.toSnakeCase;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TextFormatTest {
 

@@ -15,12 +15,12 @@ limitations under the License.
 
 package com.simondata.pouroversql.writers;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.util.*;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class JsonLRowWriterTest {
 
