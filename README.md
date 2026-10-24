@@ -21,7 +21,7 @@ More info: http://jsonlines.org/
 * Files can be CSV or JSONL
 
 ### Author and Contributors
-Written by @chetmancini and owned by Simon Data, Inc. Offered without warranty.
+Originally created at Simon Data, Inc., reboot by Chet Mancini. Offered without warranty.
 
 ## Installation
 
@@ -48,8 +48,7 @@ gradle javadoc
 ## Usage
 ### API Documentation
 
-The Javadoc for Pour Over SQL is available here:
-[http://opensource.simondata.com/pourover-sql/api/](http://opensource.simondata.com/pourover-sql/api/)
+Javadoc: coming soon.
 
 ### Use as a library
 

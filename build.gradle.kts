@@ -63,7 +63,7 @@ dependencies {
 }
 
 application {
-    mainClass = "com.simondata.pouroversql.ExtractorRunner"
+    mainClass = "io.github.chetmancini.pouroversql.ExtractorRunner"
 }
 
 tasks.test {
