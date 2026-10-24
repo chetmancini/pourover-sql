@@ -71,6 +71,49 @@ class PouroverTest {
     }
 
     @Test
+    void queriesRunWithAutoCommitOffAndRestored() throws Exception {
+        ds.exec("CREATE TABLE t (n INT)", "INSERT INTO t VALUES (1), (2)");
+        ds.initialAutoCommit(true);
+
+        pourover.list("SELECT n FROM t");
+        assertThat(ds.events()).containsExactly(
+                "setAutoCommit(false)", "prepareStatement autoCommit=false", "rollback", "setAutoCommit(true)", "close");
+
+        ds.events().clear();
+        pourover.forEach("SELECT n FROM t", row -> { });
+        assertThat(ds.events()).containsExactly(
+                "setAutoCommit(false)", "prepareStatement autoCommit=false", "rollback", "setAutoCommit(true)", "close");
+
+        ds.events().clear();
+        pourover.writeTo("SELECT n FROM t", tempDir.resolve("a.jsonl"), OutputFormat.JSONL);
+        assertThat(ds.events()).containsExactly(
+                "setAutoCommit(false)", "prepareStatement autoCommit=false", "rollback", "setAutoCommit(true)", "close");
+
+        ds.events().clear();
+        try (RowStream stream = pourover.stream("SELECT n FROM t")) {
+            assertThat(ds.events()).containsExactly("setAutoCommit(false)", "prepareStatement autoCommit=false");
+            assertThat(stream.rows().count()).isEqualTo(2);
+        }
+        assertThat(ds.events()).containsExactly(
+                "setAutoCommit(false)", "prepareStatement autoCommit=false", "rollback", "setAutoCommit(true)", "close");
+    }
+
+    @Test
+    void autoCommitIsRestoredToItsOriginalValue() throws Exception {
+        ds.exec("CREATE TABLE t (n INT)");
+        ds.initialAutoCommit(false);
+        pourover.list("SELECT n FROM t");
+        assertThat(ds.events()).containsExactly(
+                "setAutoCommit(false)", "prepareStatement autoCommit=false", "rollback", "setAutoCommit(false)", "close");
+    }
+
+    @Test
+    void failedQueryStillRollsBackAndRestoresAutoCommit() {
+        assertThatThrownBy(() -> pourover.list("SELECT * FROM missing_table")).isInstanceOf(QueryException.class);
+        assertThat(ds.events()).endsWith("rollback", "setAutoCommit(true)", "close");
+    }
+
+    @Test
     void listReturnsRowsInColumnOrder() throws Exception {
         ds.exec("CREATE TABLE t (z INT, a VARCHAR(10), m INT)",
                 "INSERT INTO t VALUES (1, 'x', 10), (2, 'y', 20)");

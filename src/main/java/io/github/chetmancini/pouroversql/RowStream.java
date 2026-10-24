@@ -54,18 +54,21 @@ public final class RowStream implements AutoCloseable {
     private final ResultSet resultSet;
     private final String secret;
     private final int logFrequency;
+    private final boolean originalAutoCommit;
 
     private boolean rowsCalled;
     private boolean exhausted;
     private boolean closed;
     private long count;
 
-    RowStream(Connection connection, Statement statement, ResultSet resultSet, String secret, int logFrequency) {
+    RowStream(Connection connection, Statement statement, ResultSet resultSet, String secret, int logFrequency,
+              boolean originalAutoCommit) {
         this.connection = connection;
         this.statement = statement;
         this.resultSet = resultSet;
         this.secret = secret;
         this.logFrequency = logFrequency;
+        this.originalAutoCommit = originalAutoCommit;
     }
 
     /**
@@ -136,6 +139,9 @@ public final class RowStream implements AutoCloseable {
         SQLException failure = null;
         for (AutoCloseable resource : new AutoCloseable[] {resultSet, statement, connection}) {
             try {
+                if (resource == connection) {
+                    Pourover.endTransaction(connection, originalAutoCommit);
+                }
                 resource.close();
             } catch (Exception e) {
                 SQLException sqlException = e instanceof SQLException s ? s : new SQLException(e);

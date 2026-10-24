@@ -164,16 +164,28 @@ public final class Pourover {
         Objects.requireNonNull(o, "o");
         Connection connection = null;
         PreparedStatement statement = null;
+        boolean originalAutoCommit = true;
+        boolean autoCommitChanged = false;
         try {
             connection = dataSource.getConnection();
+            originalAutoCommit = beginReadOnlyTransaction(connection);
+            autoCommitChanged = true;
             statement = prepare(connection, sql, o);
             ResultSet resultSet = statement.executeQuery();
-            return new RowStream(connection, statement, resultSet, secret, o.logFrequency());
+            return new RowStream(connection, statement, resultSet, secret, o.logFrequency(), originalAutoCommit);
         } catch (SQLException e) {
-            closeAfterFailure(e, statement, connection);
+            closeAfterFailure(e, statement);
+            if (autoCommitChanged) {
+                endTransaction(connection, originalAutoCommit);
+            }
+            closeAfterFailure(e, connection);
             throw QueryException.wrap(e, secret);
         } catch (RuntimeException | Error e) {
-            closeAfterFailure(e, statement, connection);
+            closeAfterFailure(e, statement);
+            if (autoCommitChanged) {
+                endTransaction(connection, originalAutoCommit);
+            }
+            closeAfterFailure(e, connection);
             throw e;
         }
     }
@@ -241,21 +253,50 @@ public final class Pourover {
     private long run(String sql, QueryOptions o, FormatOptions fo, RowWriter writer) {
         Objects.requireNonNull(sql, "sql");
         Objects.requireNonNull(o, "o");
-        try (Connection connection = dataSource.getConnection();
-             PreparedStatement statement = prepare(connection, sql, o);
-             ResultSet resultSet = statement.executeQuery()) {
-            writer.begin(columnKeys(resultSet, fo));
-            long count = 0;
-            while (resultSet.next()) {
-                writer.writeRow(fo.formatKeys(ResultSets.toMap(resultSet)));
-                count++;
-                if (count % o.logFrequency() == 0) {
-                    logger.info("Handled {} rows...", count);
+        try (Connection connection = dataSource.getConnection()) {
+            boolean originalAutoCommit = beginReadOnlyTransaction(connection);
+            try (PreparedStatement statement = prepare(connection, sql, o);
+                 ResultSet resultSet = statement.executeQuery()) {
+                writer.begin(columnKeys(resultSet, fo));
+                long count = 0;
+                while (resultSet.next()) {
+                    writer.writeRow(fo.formatKeys(ResultSets.toMap(resultSet)));
+                    count++;
+                    if (count % o.logFrequency() == 0) {
+                        logger.info("Handled {} rows...", count);
+                    }
                 }
+                return count;
+            } finally {
+                // After the statement and result set are closed, before the connection is returned.
+                endTransaction(connection, originalAutoCommit);
             }
-            return count;
         } catch (SQLException e) {
             throw QueryException.wrap(e, secret);
+        }
+    }
+
+    /**
+     * Turns autocommit off so drivers honor fetchSize with a cursor (PostgreSQL ignores it in
+     * autocommit mode and loads the whole result into memory).
+     * @return the autocommit value to restore
+     */
+    private static boolean beginReadOnlyTransaction(Connection connection) throws SQLException {
+        boolean original = connection.getAutoCommit();
+        connection.setAutoCommit(false);
+        return original;
+    }
+
+    /**
+     * Rolls back the read-only transaction and restores autocommit so a pooled connection is
+     * returned as it was lent. Failures are logged, not thrown: the query outcome is already decided.
+     */
+    static void endTransaction(Connection connection, boolean originalAutoCommit) {
+        try {
+            connection.rollback();
+            connection.setAutoCommit(originalAutoCommit);
+        } catch (SQLException e) {
+            logger.debug("Could not roll back and restore autocommit", e);
         }
     }
 

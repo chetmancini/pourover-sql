@@ -17,6 +17,8 @@ package io.github.chetmancini.pouroversql;
 
 import javax.sql.DataSource;
 import java.io.PrintWriter;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -39,6 +41,8 @@ final class H2DataSource implements DataSource {
 
     private final String url;
     private final List<Connection> handedOut = new CopyOnWriteArrayList<>();
+    private final List<String> events = new CopyOnWriteArrayList<>();
+    private boolean initialAutoCommit = true;
 
     H2DataSource() {
         this("");
@@ -67,6 +71,19 @@ final class H2DataSource implements DataSource {
         }
     }
 
+    /**
+     * Connection lifecycle calls seen so far, in order: {@code setAutoCommit(x)}, {@code rollback},
+     * {@code close}, and {@code prepareStatement autoCommit=x} (the state when a statement was prepared).
+     */
+    List<String> events() {
+        return events;
+    }
+
+    /** Makes later connections start with the given autocommit value, like a pool that hands one out. */
+    void initialAutoCommit(boolean value) {
+        this.initialAutoCommit = value;
+    }
+
     /** All connections handed out so far. */
     List<Connection> connections() {
         return handedOut;
@@ -87,16 +104,33 @@ final class H2DataSource implements DataSource {
 
     @Override
     public Connection getConnection() throws SQLException {
-        Connection c = DriverManager.getConnection(url, USER, PASSWORD);
-        handedOut.add(c);
-        return c;
+        return track(DriverManager.getConnection(url, USER, PASSWORD));
     }
 
     @Override
     public Connection getConnection(String username, String password) throws SQLException {
-        Connection c = DriverManager.getConnection(url, username, password);
-        handedOut.add(c);
-        return c;
+        return track(DriverManager.getConnection(url, username, password));
+    }
+
+    private Connection track(Connection real) throws SQLException {
+        real.setAutoCommit(initialAutoCommit);
+        Connection proxy = (Connection) Proxy.newProxyInstance(
+                Connection.class.getClassLoader(), new Class<?>[] {Connection.class}, (p, method, args) -> {
+                    switch (method.getName()) {
+                        case "setAutoCommit" -> events.add("setAutoCommit(" + args[0] + ")");
+                        case "rollback" -> events.add("rollback");
+                        case "close" -> events.add("close");
+                        case "prepareStatement" -> events.add("prepareStatement autoCommit=" + real.getAutoCommit());
+                        default -> { }
+                    }
+                    try {
+                        return method.invoke(real, args);
+                    } catch (InvocationTargetException e) {
+                        throw e.getCause();
+                    }
+                });
+        handedOut.add(proxy);
+        return proxy;
     }
 
     @Override
