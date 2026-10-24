@@ -102,11 +102,11 @@ try (RowStream stream = db.stream("SELECT * FROM big_table")) {
 ### CLI
 
 - Rebuilt on picocli; the flags are unchanged, and the single-dash 0.x forms (`-dry`, `-format`, `-fetchsize`, `-timeout`, `-maxrows`, `-custom`) still work. `--help` and `--version` are new (standard picocli options).
-- Exit codes: `0` success, `1` query failure (the message goes to stderr, never the password or a stack trace), `2` usage error (bad or unknown option values, `--timeout`/`--fetchsize`/`--maxrows` of zero or less, an unknown `--type`, `--format` or `--case`, or no password available).
+- Exit codes: `0` success, `1` query or output failure, or any other runtime error while running the query (for example a key-case collision), `2` usage error (bad or unknown option values, `--timeout`/`--fetchsize`/`--maxrows` of zero or less, an unknown `--type`, `--format` or `--case`, or no password available). Errors are one line on stderr, never the password or a stack trace.
 - With no `EXTRACT_DB_PASSWORD` and no console the CLI now exits `2` with a clear message; before, it failed with a `NullPointerException`.
 - `--maxrows` now limits rows; before, the option was read under the wrong key and ignored.
 - Logging: the CLI no longer forces slf4j-simple to TRACE; it uses the slf4j-simple defaults (override with `-Dorg.slf4j.simpleLogger.defaultLogLevel=...`).
-- `--dry` prints the connection parameters (password redacted), query options and format options to stdout, then exits `0`.
+- `--dry` prints the connection parameters (password redacted), query options and format options to stdout, then exits `0`. It never prompts for a password: it shows `password=[REDACTED]` when `EXTRACT_DB_PASSWORD` is set and `password=null` otherwise.
 
 ### Build
 

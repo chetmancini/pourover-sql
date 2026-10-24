@@ -135,15 +135,15 @@ java -jar pourover-sql-<version>-all.jar [options]
 | `--maxrows`, `-maxrows` | no limit | Maximum rows to write. Must be greater than zero. |
 | `--timeout`, `-timeout` | no timeout | Query timeout in seconds. Must be greater than zero. |
 | `--custom`, `-custom` | none | Engine property as `key=value`; repeat for more. See `ConnectionParams` in the Javadoc for the keys. |
-| `--dry`, `-dry` | off | Print connection, query and format options (password redacted), then exit `0`. |
+| `--dry`, `-dry` | off | Print connection, query and format options, then exit `0`. Never prompts for a password. |
 | `--help` | | Show usage. |
 | `--version` | | Print the version. |
 
 The single-dash forms `-dry`, `-format`, `-fetchsize`, `-timeout`, `-maxrows` and `-custom` are the 0.x spellings, kept so existing scripts keep working.
 
-Exit codes: `0` success, `1` the query or the output file failed (the message goes to stderr), `2` usage error (bad option value, unknown `--type`, `--format` or `--case`, no password available, or an SQL file or stdin that cannot be read). `--dry` never needs a password and exits `0` without one.
+Exit codes: `0` success; `1` the query or the output file failed, or another error stopped the run (for example two columns that map to the same key under `--case`); `2` usage error (bad option value, unknown `--type`, `--format` or `--case`, no password available, or an SQL file or stdin that cannot be read). Errors are printed to stderr as one line, without a stack trace.
 
-The password comes from the `EXTRACT_DB_PASSWORD` environment variable, or a console prompt when that is unset. With neither, the command exits `2`. There is no password flag, on purpose: it would end up in shell history and process listings.
+The password comes from the `EXTRACT_DB_PASSWORD` environment variable, or a console prompt when that is unset. With neither, the command exits `2`. `--dry` is the exception: it never prompts and never needs a password, and prints `password=[REDACTED]` when `EXTRACT_DB_PASSWORD` is set and `password=null` when it is not. There is no password flag, on purpose: it would end up in shell history and process listings.
 
 ## Why Pour-Over SQL
 

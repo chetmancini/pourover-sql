@@ -36,6 +36,7 @@ import java.sql.Statement;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import javax.sql.DataSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -72,6 +73,10 @@ class PouroverCommandTest {
     }
 
     private int run(String stdin, String envPassword, String... args) {
+        return run(stdin, envPassword, () -> null, args);
+    }
+
+    private int run(String stdin, String envPassword, Supplier<char[]> console, String... args) {
         InputStream in = new ByteArrayInputStream(stdin.getBytes(StandardCharsets.UTF_8));
         BiFunction<SqlEngine, ConnectionParams, Pourover> factory = (engine, params) -> {
             seenEngine = engine;
@@ -80,7 +85,7 @@ class PouroverCommandTest {
         };
         PouroverCommand command = new PouroverCommand(
                 name -> PouroverCommand.ENV_VAR_PASSWORD_KEY.equals(name) ? envPassword : null,
-                () -> null, in, factory);
+                console, in, factory);
         CommandLine cmd = new CommandLine(command);
         cmd.setOut(new PrintWriter(out, true));
         cmd.setErr(new PrintWriter(err, true));
@@ -109,6 +114,35 @@ class PouroverCommandTest {
         assertThat(code).isEqualTo(1);
         assertThat(err.toString()).isNotBlank().doesNotContain(password).doesNotContain("\tat ");
         assertThat(out.toString()).doesNotContain(password);
+        // The prefix appears once (QueryException's message already starts with it).
+        assertThat(err.toString()).startsWith("Query failed").doesNotContain("Query failed: Query failed");
+        assertThat(err.toString().split("Query failed", -1)).hasSize(2);
+    }
+
+    @Test
+    void unexpectedRuntimeExceptionExitsOneWithoutStackTrace() {
+        // Two labels that collide under snake case raise IllegalStateException inside writeTo.
+        int code = run("SELECT id AS \"userId\", first_name AS \"user_id\" FROM users", password,
+                "-u", "me", "-f", file(), "--case", "snake");
+        assertThat(code).isEqualTo(1);
+        assertThat(err.toString()).startsWith("Error: ").contains("user_id")
+                .doesNotContain("\tat ").doesNotContain("Exception");
+    }
+
+    @Test
+    void dryRunNeverPromptsForPassword() {
+        Supplier<char[]> failingConsole = () -> {
+            throw new AssertionError("--dry must not prompt for a password");
+        };
+        int code = run("", null, failingConsole, "--dry", "-u", "me");
+        assertThat(code).isZero();
+        assertThat(out.toString()).contains("password=null");
+        assertThat(err.toString()).isEmpty();
+
+        out.getBuffer().setLength(0);
+        code = run("", password, failingConsole, "--dry", "-u", "me");
+        assertThat(code).isZero();
+        assertThat(out.toString()).contains("password=[REDACTED]").doesNotContain(password);
     }
 
     @Test

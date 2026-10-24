@@ -48,7 +48,8 @@ import java.util.function.Supplier;
 /**
  * Command-line entry point: runs a SQL query and writes the rows to a file.
  *
- * <p>Exit codes: 0 success, 1 query failure, 2 usage error.
+ * <p>Exit codes: 0 success, 1 query or output failure (including any other runtime error while
+ * running the query), 2 usage error. {@code --dry} never prompts for a password.
  */
 @Command(
         name = "pourover",
@@ -177,14 +178,14 @@ public class PouroverCommand implements java.util.concurrent.Callable<Integer> {
         FormatOptions formatOptions = new FormatOptions(KeyCase.fromName(keyCase));
 
         String password = env.apply(ENV_VAR_PASSWORD_KEY);
-        if (password == null) {
+        // --dry never prompts: it only reports whether EXTRACT_DB_PASSWORD is set.
+        if (password == null && !dry) {
             char[] typed = console.get();
-            if (typed != null) {
-                password = new String(typed);
-            } else if (!dry) {
+            if (typed == null) {
                 return usageError(err, "No password available: set " + ENV_VAR_PASSWORD_KEY
                         + " or run in an interactive terminal");
             }
+            password = new String(typed);
         }
         Properties props = new Properties();
         props.putAll(custom);
@@ -210,7 +211,8 @@ public class PouroverCommand implements java.util.concurrent.Callable<Integer> {
             pourover.writeTo(sql, Path.of(file), outputFormat, formatOptions, queryOptions);
             return EXIT_OK;
         } catch (QueryException e) {
-            err.println("Query failed: " + e.getMessage());
+            // The message already starts with "Query failed".
+            err.println(e.getMessage());
             err.flush();
             return EXIT_QUERY_FAILURE;
         } catch (UncheckedIOException e) {
@@ -219,6 +221,12 @@ public class PouroverCommand implements java.util.concurrent.Callable<Integer> {
             return EXIT_QUERY_FAILURE;
         } catch (IllegalArgumentException e) {
             return usageError(err, e.getMessage());
+        } catch (RuntimeException e) {
+            // For example a key-case collision (IllegalStateException): report it, no stack trace.
+            String message = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            err.println("Error: " + message);
+            err.flush();
+            return EXIT_QUERY_FAILURE;
         }
     }
 
