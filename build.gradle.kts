@@ -74,6 +74,17 @@ tasks.startScripts {
     classpath = files(tasks.jar, configurations.runtimeClasspath, cli)
 }
 
+distributions {
+    main {
+        contents {
+            into("lib") {
+                from(cli)
+                duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+            }
+        }
+    }
+}
+
 tasks.test {
     useJUnitPlatform()
 }
