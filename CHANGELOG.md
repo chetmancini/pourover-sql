@@ -55,8 +55,17 @@ try (RowStream stream = db.stream("SELECT * FROM big_table")) {
 - **Engine properties.** The PostgreSQL and SQL Server options formerly on `PostgreSQLSQLParams` and `SQLServerSQLParams` are read from `ConnectionParams.properties`, with the same keys and defaults: PostgreSQL connections are read-only unless `readOnly=false`, and SQL Server `encrypt` and `trustServerCertificate` default to `false`. Snowflake, Redshift and Athena now pass all properties to the driver, so Snowflake `warehouse` and `role` work. MySQL and Informix still ignore them.
 - **Unsupported engines throw.** `ClientFactory` throws `IllegalArgumentException` for `ORACLE` and `BIGQUERY` instead of returning `null`.
 
+### CLI
+
+- Rebuilt on picocli; the flags are unchanged. `--help` and `--version` are new (standard picocli options).
+- Exit codes: `0` success, `1` query failure (the message goes to stderr, never the password or a stack trace), `2` usage error (bad or unknown option values, `--timeout`/`--fetchsize`/`--maxrows` of zero or less, an unknown `--type`, `--format` or `--case`, or no password available).
+- With no `EXTRACT_DB_PASSWORD` and no console the CLI now exits `2` with a clear message; before, it failed with a `NullPointerException`.
+- `--maxrows` now limits rows; before, the option was read under the wrong key and ignored.
+- Logging: the CLI no longer forces slf4j-simple to TRACE; it uses the slf4j-simple defaults (override with `-Dorg.slf4j.simpleLogger.defaultLogLevel=...`).
+- `--dry` prints the connection parameters (password redacted), query options and format options to stdout, then exits `0`.
+
 ### Build
 
 - Gradle Kotlin DSL, Java 21 toolchain, JUnit 5 and AssertJ, H2-backed tests.
 - Package moved from `com.simondata.pouroversql` to `io.github.chetmancini.pouroversql`.
-- Dropped Guava, commons-collections, commons-text and commons-dbutils. `slf4j-simple` is now only on the CLI runtime classpath.
+- Replaced commons-cli with picocli. Dropped Guava, commons-collections, commons-text and commons-dbutils. `slf4j-simple` is now only on the CLI runtime classpath.

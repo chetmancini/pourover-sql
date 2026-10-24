@@ -42,7 +42,7 @@ val cli: Configuration by configurations.creating
 dependencies {
     cli(libs.slf4j.simple)
     api(libs.slf4j.api)
-    implementation(libs.commons.cli)
+    implementation(libs.picocli)
     implementation(libs.gson)
     implementation(libs.informix.jdbc)
     implementation(libs.mssql.jdbc)
@@ -59,7 +59,13 @@ dependencies {
 }
 
 application {
-    mainClass = "io.github.chetmancini.pouroversql.ExtractorRunner"
+    mainClass = "io.github.chetmancini.pouroversql.cli.PouroverCommand"
+}
+
+tasks.jar {
+    manifest {
+        attributes("Implementation-Version" to project.version)
+    }
 }
 
 tasks.shadowJar {

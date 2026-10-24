@@ -1,7 +1,7 @@
 [versions]
 shadow = "9.6.1"
 slf4j = "2.0.20"
-commons-cli = "1.11.0"
+picocli = "4.7.7"
 gson = "2.15.0"
 informix = "15.0.1.4"
 mssql = "13.6.1.jre11"
@@ -16,7 +16,7 @@ h2 = "2.5.252"
 [libraries]
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
-commons-cli = { module = "commons-cli:commons-cli", version.ref = "commons-cli" }
+picocli = { module = "info.picocli:picocli", version.ref = "picocli" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 informix-jdbc = { module = "com.ibm.informix:jdbc", version.ref = "informix" }
 mssql-jdbc = { module = "com.microsoft.sqlserver:mssql-jdbc", version.ref = "mssql" }
