@@ -34,6 +34,7 @@
 - Query errors were logged and swallowed (`null` or `-1` returned); they now throw.
 - CSV output only quoted `String` values and only on the platform line separator; quoting now follows the rendered text.
 - Gson failed on `java.time` values under JDK 21.
+- JSONL failed on `ARRAY`, `CLOB`, `BLOB` and driver-specific values, and `list()` returned LOB/array locators that stopped working once the connection closed; values are now materialized (see Behavior changes).
 
 ### Playground (details)
 
@@ -85,6 +86,8 @@ try (RowStream stream = db.stream("SELECT * FROM big_table")) {
 - **Key case.** `FormatOptions` key case applies to `writeTo` output. `list`, `forEach` and `stream` return raw column labels; call `FormatOptions.formatKeys(row)` to convert them. If two columns convert to the same key (for example `userId` and `user_id` under `SNAKE`), an `IllegalStateException` naming both columns is thrown instead of one value silently overwriting the other.
 - **JSON output skips HTML escaping.** `=`, `<`, `>`, `&` and `'` are written as-is; they are no longer turned into Gson's HTML-safe Unicode escapes (a backslash, `u` and four hex digits). The output is still valid JSON.
 - **Dates and times are ISO-8601 strings.** In JSONL and CSV, `java.sql.Timestamp`, `Date` and `Time` and the `java.time` types are written as ISO-8601 strings, for example `2024-01-02T03:04:05`, `2024-01-02` or `2024-01-02T03:04:05+02:00`. Before, Gson failed on `java.time` values under JDK 21, and CSV used `Timestamp.toString()`.
+- **Arrays, LOBs, binary and driver types are materialized.** Rows from `list`, `forEach`, `stream` and `writeTo` are read fully while the row is current, so they stay usable after the connection closes: SQL `ARRAY` becomes a `List`, `CLOB` and `SQLXML` become a `String`, and `BLOB` and `byte[]` become a Base64 string (RFC 4648, no line breaks). Any other value whose class is not from `java.*` or `javax.*` (for example a PostgreSQL `PGobject` for `json`/`jsonb`) becomes its `toString()`. Before, `list()` returned driver locators that failed once the connection closed, JSONL failed with a Gson `JsonIOException` on these types under JDK 21, and CSV wrote `byte[]` as `[B@...`.
+- **Rendering never reflects into unknown types.** `RowFormatter` writes `byte[]` as Base64 in JSONL and CSV, lists, maps and arrays element by element (as JSON, also inside a CSV field, for example `"[1,2]"`), and any type that is not a JDK string, number, boolean, character or date/time with `toString()`.
 - **CSV quoting.** Quoting is decided from a value's rendered text whatever its type, so JSON/JSONB objects, arrays and other non-string values containing the delimiter, a quote or a newline are quoted too. Before, only `String` values were quoted. A value is quoted when it contains `\n` or `\r`; before, it was quoted only when it contained the platform line separator. Header names are quoted by the same rules as values.
 - **Empty CSV results have a header.** `writeTo` with `OutputFormat.CSV` writes the header row (key case applied) from the result's column labels even when there are no rows. An empty JSONL result is still an empty file.
 - **File output is UTF-8 everywhere,** including `FileRowWriter.open(OutputStream)`.
@@ -110,7 +113,6 @@ try (RowStream stream = db.stream("SELECT * FROM big_table")) {
 ### Known limitations
 
 - If `writeTo` fails part way (a query error or an I/O error), the partly written output file may remain on disk; the library does not delete it.
-- `byte[]` values are not rendered meaningfully in CSV: `RowFormatter` writes the array's `toString()` (something like `[B@1b6d3586`). In JSONL, Gson writes the bytes as an array of numbers. Cast or encode binary columns in SQL (for example to hex or base64) if you need them.
 - MySQL streaming with `fetchSize` needs the driver's `useCursorFetch` option, which is not enabled; without it Connector/J reads the whole result into memory.
 - The driver reads a single very large value (a big text or binary column) into memory; streaming is per row, not per value.
 - Athena, Snowflake, Redshift, Informix and SQL Server are not tested end to end; only PostgreSQL and MySQL are.

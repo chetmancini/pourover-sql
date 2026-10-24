@@ -16,10 +16,16 @@
 
 package io.github.chetmancini.pouroversql.util;
 
+import java.sql.Array;
+import java.sql.Blob;
+import java.sql.Clob;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.sql.SQLXML;
+import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,6 +43,19 @@ public final class ResultSets {
     /**
      * Map the current row to a map keyed by column label, in column order.
      * If two columns share a label the later one wins. SQL NULL maps to null.
+     *
+     * <p>Values are materialized while the row is current, so the map stays usable after the
+     * connection closes:
+     * <ul>
+     *   <li>{@link Array} becomes a {@link List} (elements materialized the same way);</li>
+     *   <li>{@link Clob} and {@link SQLXML} become a {@link String};</li>
+     *   <li>{@link Blob} and {@code byte[]} become a Base64 string (RFC 4648, no line breaks);</li>
+     *   <li>any other value whose class is not from {@code java.*} or {@code javax.*} (for example
+     *       a driver's {@code PGobject}) becomes its {@code toString()}, unless it is a
+     *       {@link Number}, {@link java.util.Date} or {@link TemporalAccessor};</li>
+     *   <li>everything else (strings, numbers, booleans, dates and times) is returned as is.</li>
+     * </ul>
+     * Array, Clob, SQLXML and Blob locators are freed after reading.
      * @param rs a ResultSet positioned on a row
      * @return the row as an ordered map
      * @throws SQLException on JDBC errors
@@ -46,9 +65,93 @@ public final class ResultSets {
         int columns = meta.getColumnCount();
         Map<String, Object> row = new LinkedHashMap<>(columns * 2);
         for (int i = 1; i <= columns; i++) {
-            row.put(label(meta, i), rs.getObject(i));
+            row.put(label(meta, i), materialize(rs.getObject(i)));
         }
         return row;
+    }
+
+    private static Object materialize(Object value) throws SQLException {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Array array) {
+            try {
+                return toList(array.getArray());
+            } finally {
+                free(array::free);
+            }
+        }
+        if (value instanceof Clob clob) {
+            try {
+                long length = clob.length();
+                return length == 0 ? "" : clob.getSubString(1, Math.toIntExact(length));
+            } finally {
+                free(clob::free);
+            }
+        }
+        if (value instanceof SQLXML xml) {
+            try {
+                return xml.getString();
+            } finally {
+                free(xml::free);
+            }
+        }
+        if (value instanceof Blob blob) {
+            try {
+                long length = blob.length();
+                return base64(length == 0 ? new byte[0] : blob.getBytes(1, Math.toIntExact(length)));
+            } finally {
+                free(blob::free);
+            }
+        }
+        if (value instanceof byte[] bytes) {
+            return base64(bytes);
+        }
+        if (value instanceof Number || value instanceof java.util.Date || value instanceof TemporalAccessor
+                || isPlatformType(value.getClass())) {
+            return value;
+        }
+        return value.toString();
+    }
+
+    private static List<Object> toList(Object array) throws SQLException {
+        if (array == null) {
+            return null;
+        }
+        if (!array.getClass().isArray()) {
+            List<Object> single = new ArrayList<>(1);
+            single.add(materialize(array));
+            return single;
+        }
+        int length = java.lang.reflect.Array.getLength(array);
+        List<Object> list = new ArrayList<>(length);
+        for (int i = 0; i < length; i++) {
+            list.add(materialize(java.lang.reflect.Array.get(array, i)));
+        }
+        return list;
+    }
+
+    private static String base64(byte[] bytes) {
+        return Base64.getEncoder().encodeToString(bytes);
+    }
+
+    private static boolean isPlatformType(Class<?> type) {
+        String name = type.getName();
+        return name.startsWith("java.") || name.startsWith("javax.");
+    }
+
+    @FunctionalInterface
+    private interface SqlAction {
+        void run() throws SQLException;
+    }
+
+    /** Frees a locator; drivers that do not support free() are ignored. */
+    private static void free(SqlAction action) {
+        try {
+            action.run();
+        } catch (SQLException | UnsupportedOperationException | AbstractMethodError e) {
+            // Best effort: the value has already been read.
+        }
     }
 
     /**

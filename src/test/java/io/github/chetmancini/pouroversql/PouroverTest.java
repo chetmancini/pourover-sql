@@ -443,6 +443,40 @@ class PouroverTest {
                 "ts,d,tm,tz" + NL + "2024-01-02T03:04:05,2024-01-02,03:04:05,2024-01-02T03:04:05+02:00" + NL);
     }
 
+    private static final String LOB_SQL =
+            "SELECT ARRAY[1, 2] AS \"a\", CAST('x' AS CLOB) AS \"c\", CAST(X'01' AS BLOB) AS \"b\"";
+
+    @Test
+    void listMaterializesArraysClobsAndBlobs() {
+        Map<String, Object> row = pourover.list(LOB_SQL).get(0);
+        // Read after list() returned, i.e. after the connection closed: no live locators.
+        assertThat(row.get("a")).isEqualTo(List.of(1, 2));
+        assertThat(row.get("c")).isEqualTo("x");
+        assertThat(row.get("b")).isEqualTo("AQ==");
+    }
+
+    @Test
+    void jsonlRendersArraysClobsBlobs() throws Exception {
+        assertThat(writeToString(LOB_SQL, OutputFormat.JSONL)).isEqualTo("{\"a\":[1,2],\"c\":\"x\",\"b\":\"AQ==\"}" + NL);
+    }
+
+    @Test
+    void csvRendersBlobAsBase64() throws Exception {
+        assertThat(writeToString(LOB_SQL, OutputFormat.CSV)).isEqualTo("a,c,b" + NL + "\"[1,2]\",x,AQ==" + NL);
+    }
+
+    @Test
+    void byteArrayIsBase64InJsonlAndCsv() throws Exception {
+        String sql = "SELECT X'010203' AS \"v\"";
+        assertThat(pourover.list(sql).get(0).get("v")).isEqualTo("AQID");
+        assertThat(writeToString(sql, OutputFormat.JSONL)).isEqualTo("{\"v\":\"AQID\"}" + NL);
+        assertThat(writeToString(sql, OutputFormat.CSV)).isEqualTo("v" + NL + "AQID" + NL);
+        // Rows built by hand (not from a ResultSet) render the same way.
+        Map<String, Object> row = Map.of("v", new byte[] {1, 2, 3});
+        assertThat(RowFormatter.jsonl(row, FormatOptions.defaults())).isEqualTo("{\"v\":\"AQID\"}");
+        assertThat(RowFormatter.csvRow(List.of(new byte[] {1, 2, 3}))).isEqualTo("AQID");
+    }
+
     @Test
     void nullsAreWrittenAsJsonNull() throws Exception {
         ds.exec("CREATE TABLE t (v VARCHAR(50))", "INSERT INTO t VALUES (NULL)");

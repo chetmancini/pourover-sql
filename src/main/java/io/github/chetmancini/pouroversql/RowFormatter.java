@@ -27,6 +27,9 @@ import java.time.OffsetTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +43,10 @@ import java.util.stream.Collectors;
  * <ul>
  *   <li>{@code java.sql.Timestamp}, {@code Date}, {@code Time} and {@code java.time} values are
  *       rendered as ISO-8601 strings (for example {@code 2024-01-02T03:04:05}).</li>
+ *   <li>{@code byte[]} is rendered as Base64 (RFC 4648, no line breaks); lists, maps and arrays
+ *       are rendered element by element (as JSON arrays and objects, also inside a CSV field);
+ *       any other type that is not a JDK string, number, boolean or character is rendered with
+ *       {@code toString()}, so driver-specific objects never reach JSON reflection.</li>
  *   <li>JSON: SQL NULL is {@code null}; non-ASCII is written raw; HTML characters such as
  *       {@code <}, {@code =} and {@code &} are not escaped.</li>
  *   <li>CSV: a value (of any type) whose text contains the delimiter, a double quote, {@code \n} or {@code \r} is wrapped
@@ -115,7 +122,9 @@ public final class RowFormatter {
         if (normalized == null) {
             return "";
         }
-        String text = normalized.toString();
+        // Lists and maps (for example materialized SQL arrays) are written as JSON.
+        String text = normalized instanceof Map || normalized instanceof List
+                ? GSON.toJson(normalized) : normalized.toString();
         // Decide from the rendered text so json/jsonb objects, arrays, Clobs, etc. are quoted too.
         if (text.contains(delimiter) || text.contains(QUOTE) || text.indexOf('\n') >= 0
                 || text.indexOf('\r') >= 0) {
@@ -125,9 +134,15 @@ public final class RowFormatter {
     }
 
     /**
-     * Converts temporal values to ISO-8601 strings; other values are returned unchanged.
+     * Converts a value into something Gson serializes without reflection: temporal values become
+     * ISO-8601 strings, {@code byte[]} becomes Base64, maps, collections and arrays are converted
+     * element by element, JDK strings, numbers, booleans and characters are kept, and anything
+     * else becomes its {@code toString()}.
      */
     private static Object normalize(Object value) {
+        if (value == null || value instanceof String || value instanceof Boolean || value instanceof Character) {
+            return value;
+        }
         if (value instanceof java.sql.Timestamp ts) {
             return DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(ts.toLocalDateTime());
         }
@@ -143,7 +158,31 @@ public final class RowFormatter {
         if (value instanceof TemporalAccessor temporal) {
             return formatTemporal(temporal);
         }
-        return value;
+        if (value instanceof byte[] bytes) {
+            return Base64.getEncoder().encodeToString(bytes);
+        }
+        if (value instanceof Number) {
+            return value.getClass().getName().startsWith("java.") ? value : value.toString();
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> result = new LinkedHashMap<>(map.size() * 2);
+            map.forEach((k, v) -> result.put(String.valueOf(k), normalize(v)));
+            return result;
+        }
+        if (value instanceof Collection<?> collection) {
+            List<Object> result = new ArrayList<>(collection.size());
+            collection.forEach(element -> result.add(normalize(element)));
+            return result;
+        }
+        if (value.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(value);
+            List<Object> result = new ArrayList<>(length);
+            for (int i = 0; i < length; i++) {
+                result.add(normalize(java.lang.reflect.Array.get(value, i)));
+            }
+            return result;
+        }
+        return value.toString();
     }
 
     private static String formatTemporal(TemporalAccessor temporal) {

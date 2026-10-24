@@ -81,6 +81,26 @@ class RowFormatterTest {
                 + "\"n\":1.50}");
     }
 
+    /** Stands in for a driver type (not java.*) that Gson cannot reflect into on JDK 21. */
+    static final class VendorValue {
+        private final java.util.concurrent.locks.ReentrantLock lock = new java.util.concurrent.locks.ReentrantLock();
+
+        @Override
+        public String toString() {
+            return "vendor-value" + (lock.isLocked() ? "!" : "");
+        }
+    }
+
+    @Test
+    void unknownVendorTypeFallsBackToToString() {
+        assertThat(RowFormatter.jsonl(row("v", new VendorValue()), FormatOptions.defaults()))
+                .isEqualTo("{\"v\":\"vendor-value\"}");
+        assertThat(RowFormatter.csvRow(List.of(new VendorValue(), 1))).isEqualTo("vendor-value,1");
+        // Nested inside a list it is also rendered by toString().
+        assertThat(RowFormatter.jsonl(row("v", List.of(new VendorValue())), FormatOptions.defaults()))
+                .isEqualTo("{\"v\":[\"vendor-value\"]}");
+    }
+
     @Test
     void csvHeaderJoinsColumnsAndQuotesSpecialNames() {
         assertThat(RowFormatter.csvHeader(List.of("a", "b"))).isEqualTo("a,b");
