@@ -1,0 +1,70 @@
+# Copyright 2026 Chet Mancini
+# Licensed under the Apache License, Version 2.0.
+#
+# DRY RUN ONLY: builds the release artifacts and publishes them to a local staging
+# directory (build/staging-repo), uploaded as a workflow artifact. Nothing is sent to
+# Maven Central until the commented-out step below is deliberately enabled.
+name: Release (dry run)
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stage:
+    name: Build and stage release artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v5
+
+      # Tag pushes must match the project version; manual dry runs skip this check
+      # because the project version is a SNAPSHOT.
+      - name: Verify tag matches project version
+        if: github.ref_type == 'tag'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(sed -n 's/^version=//p' gradle.properties)"
+          if [ "${TAG#v}" != "$version" ]; then
+            echo "Tag $TAG does not match gradle.properties version $version" >&2
+            exit 1
+          fi
+
+      # `build` runs the unit tests and assembles the library jar, sources jar and javadoc jar.
+      - name: Build
+        run: ./gradlew build
+
+      - name: Publish to local staging repository
+        run: ./gradlew publishAllPublicationsToStagingRepository
+
+      - name: Upload staging repository
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-repo
+          path: build/staging-repo
+          if-no-files-found: error
+
+      # ---------------------------------------------------------------------------------
+      # DISABLED: enable after Central Portal namespace verification for io.github.chetmancini
+      #
+      # Intended configuration (requires adding a Central Portal publishing plugin to the
+      # build and a Central Portal repository; neither exists yet):
+      #
+      # - name: Publish to Maven Central (Central Portal)
+      #   env:
+      #     ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
+      #     ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
+      #     ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_KEY }}
+      #     ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASSWORD }}
+      #   run: ./gradlew publishAllPublicationsToCentralPortalRepository
+      # ---------------------------------------------------------------------------------
