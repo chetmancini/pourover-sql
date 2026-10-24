@@ -1,14 +1,20 @@
 # JDBC drivers
 
-| Engine | Driver artifact / class | Bundled? | How to supply | E2E tested |
+| Engine | Driver artifact / class | Bundled in the CLI jar? | How to supply | E2E tested |
 |--------|-------------------------|----------|---------------|------------|
-| PostgreSQL | `org.postgresql:postgresql:42.7.14`, class `org.postgresql.Driver` | Bundled | Nothing to do | Yes (`postgres:16-alpine`) |
-| MySQL | `com.mysql:mysql-connector-j:26.10.0`, class `com.mysql.cj.jdbc.Driver` | Bundled | Nothing to do | Yes (`mysql:8.4`) |
-| SQL Server | `com.microsoft.sqlserver:mssql-jdbc:13.6.1.jre11`, class `com.microsoft.sqlserver.jdbc.Driver` | Bundled | Nothing to do | Not e2e tested |
-| Snowflake | `net.snowflake:snowflake-jdbc:4.4.0`, class `net.snowflake.client.jdbc.SnowflakeDriver` | Bundled | Nothing to do | Not e2e tested |
-| Redshift | `com.amazon.redshift:redshift-jdbc42:2.3.0` (Maven Central), class `com.amazon.redshift.Driver` | Bundled | Nothing to do | Not e2e tested |
-| Informix | `com.ibm.informix:jdbc:15.0.1.4` (Maven Central), class `com.informix.jdbc.IfxDriver` | Bundled | Nothing to do | Not e2e tested |
+| PostgreSQL | `org.postgresql:postgresql:42.7.14`, class `org.postgresql.Driver` | Optional (`-Pengines`) | Add the artifact to your build | Yes (`postgres:16-alpine`) |
+| MySQL | `com.mysql:mysql-connector-j:26.10.0`, class `com.mysql.cj.jdbc.Driver` | Optional (`-Pengines`) | Add the artifact to your build | Yes (`mysql:8.4`) |
+| SQL Server | `com.microsoft.sqlserver:mssql-jdbc:13.6.1.jre11`, class `com.microsoft.sqlserver.jdbc.Driver` | Optional (`-Pengines`) | Add the artifact to your build | Not e2e tested |
+| Snowflake | `net.snowflake:snowflake-jdbc:4.4.0`, class `net.snowflake.client.jdbc.SnowflakeDriver` | Optional (`-Pengines`) | Add the artifact to your build | Not e2e tested |
+| Redshift | `com.amazon.redshift:redshift-jdbc42:2.3.0` (Maven Central), class `com.amazon.redshift.Driver` | Optional (`-Pengines`) | Add the artifact to your build | Not e2e tested |
+| Informix | `com.ibm.informix:jdbc:15.0.1.4` (Maven Central), class `com.informix.jdbc.IfxDriver` | Optional (`-Pengines`) | Add the artifact to your build | Not e2e tested |
 | Athena | Official AWS Athena JDBC driver, class `com.amazon.athena.jdbc.AthenaDriver` (URL schemes `jdbc:athena`, deprecated `jdbc:awsathena`) | User-supplied | See below | Not e2e tested |
+
+## Choosing drivers
+
+The `pourover-sql` library does not depend on any JDBC driver. Add the one you need as a `runtimeOnly` (Gradle) or `runtime`-scope (Maven) dependency, using the artifact in the table above. Connecting without it throws an `IllegalStateException` that names the artifact. Library users pick their own driver version; the versions in the table are the ones the tests run against.
+
+The command-line fat jar is built from source with the drivers you choose: `./gradlew shadowJar -Pengines=postgres,mysql` writes `pourover-sql-<version>-postgres-mysql.jar`, and plain `./gradlew shadowJar` bundles all six (about 100 MB, mostly Snowflake). Engine names: `postgres`, `mysql`, `sqlserver`, `snowflake`, `redshift`, `informix`.
 
 ## Athena
 
@@ -32,6 +38,6 @@ Supply the jar on the classpath:
 ## Notes
 
 - PostgreSQL and MySQL are tested end to end against real databases in Testcontainers (`./gradlew e2eTest`, needs Docker; skipped when Docker is unavailable, and not part of `build`). The other engines are not e2e tested.
-- Redshift and Informix resolve from Maven Central at current versions, so they are bundled.
-- All bundled drivers appear with `runtime` scope in the published POM. The only compile-scope dependency is `slf4j-api`.
+- Redshift and Informix resolve from Maven Central at current versions, so `-Pengines` can bundle them.
+- The published POM lists only `slf4j-api` (compile) and Gson (runtime). No driver or picocli is a dependency.
 - `slf4j-simple` is a CLI-only runtime binding (included in the fat jar and `./gradlew run`), never in the library POM.

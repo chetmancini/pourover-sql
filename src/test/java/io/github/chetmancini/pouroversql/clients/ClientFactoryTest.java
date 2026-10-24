@@ -155,4 +155,13 @@ class ClientFactoryTest {
         assertThatThrownBy(() -> ClientFactory.makeSQLClient(null, params))
                 .isInstanceOf(NullPointerException.class);
     }
+
+    @Test
+    void missingDriverFailsWithAnActionableMessage() {
+        assertThatThrownBy(() -> ClientFactory.requireDriver("com.example.NoSuchDriver", "Example", "com.example:driver"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Example JDBC driver not found")
+                .hasMessageContaining("com.example:driver")
+                .hasMessageContaining("docs/drivers.md");
+    }
 }

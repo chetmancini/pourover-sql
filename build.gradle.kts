@@ -36,27 +36,53 @@ repositories {
     mavenCentral()
 }
 
-// slf4j-simple is a runtime binding for the CLI only; it must never reach the library POM.
-val cli: Configuration = configurations.create("cli")
+// JDBC drivers are optional: the library compiles against them but does not put them in its POM, so
+// applications add only the driver(s) they use. Each engine has its own configuration so the CLI
+// fat jar can bundle any subset (-Pengines=postgres,mysql); `allDrivers` is the full set for tests.
+val driverEngines: Map<String, Provider<MinimalExternalModuleDependency>> = linkedMapOf(
+    "postgres" to libs.postgresql,
+    "mysql" to libs.mysql.connector,
+    "sqlserver" to libs.mssql.jdbc,
+    "snowflake" to libs.snowflake.jdbc,
+    "redshift" to libs.redshift.jdbc,
+    "informix" to libs.informix.jdbc,
+)
+val engineDrivers: Map<String, Configuration> = driverEngines.mapValues { (engine, driver) ->
+    configurations.create("driver-$engine") {
+        isCanBeConsumed = false
+        dependencies.add(project.dependencies.create(driver.get()))
+    }
+}
+val allDrivers: Configuration = configurations.create("allDrivers") {
+    isCanBeConsumed = false
+    extendsFrom(*engineDrivers.values.toTypedArray())
+}
+
+// slf4j-simple and picocli serve the CLI only; they must never reach the library POM.
+val cli: Configuration = configurations.create("cli") {
+    isCanBeConsumed = false
+}
 
 dependencies {
     cli(libs.slf4j.simple)
+    cli(libs.picocli)
     api(libs.slf4j.api)
-    implementation(libs.picocli)
     implementation(libs.gson)
-    implementation(libs.informix.jdbc)
-    implementation(libs.mssql.jdbc)
-    implementation(libs.redshift.jdbc)
-    implementation(libs.mysql.connector)
-    implementation(libs.postgresql)
-    implementation(libs.snowflake.jdbc)
+    compileOnly(libs.picocli)
+    compileOnly(libs.informix.jdbc)
+    compileOnly(libs.mssql.jdbc)
+    compileOnly(libs.mysql.connector)
+    compileOnly(libs.postgresql)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.assertj.core)
     testRuntimeOnly(libs.junit.platform.launcher)
     testRuntimeOnly(libs.h2)
+    testImplementation(libs.picocli)
 }
+
+configurations.testImplementation { extendsFrom(allDrivers) }
 
 // End-to-end tests against real databases in Testcontainers. Needs Docker, so it is a separate
 // source set and task that `test`, `check` and `build` do not depend on: run `./gradlew e2eTest`.
@@ -67,6 +93,7 @@ val e2eTest: SourceSet = sourceSets.create("e2eTest").apply {
 
 configurations[e2eTest.implementationConfigurationName].extendsFrom(configurations.implementation.get())
 configurations[e2eTest.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly.get())
+configurations[e2eTest.runtimeOnlyConfigurationName].extendsFrom(allDrivers)
 
 dependencies {
     "e2eTestImplementation"(platform(libs.junit.bom))
@@ -89,16 +116,30 @@ tasks.jar {
     }
 }
 
+// `shadowJar` bundles every driver (the -all jar). `-Pengines=postgres,mysql` narrows it to those
+// drivers and names the jar after them, for example pourover-sql-<version>-postgres-mysql.jar.
+val selectedEngines: List<String> = providers.gradleProperty("engines").orNull
+    ?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+    ?.also { requested ->
+        val unknown = requested - engineDrivers.keys
+        require(unknown.isEmpty()) { "Unknown engines $unknown; choose from ${engineDrivers.keys}" }
+    }
+    ?: emptyList()
+
 tasks.shadowJar {
-    configurations = listOf(project.configurations.runtimeClasspath.get(), cli)
+    configurations = listOf(project.configurations.runtimeClasspath.get(), cli) +
+        (if (selectedEngines.isEmpty()) listOf(allDrivers) else selectedEngines.map { engineDrivers.getValue(it) })
+    if (selectedEngines.isNotEmpty()) {
+        archiveClassifier = selectedEngines.joinToString("-")
+    }
 }
 
 tasks.run.configure {
-    classpath += cli
+    classpath += cli + allDrivers
 }
 
 tasks.startScripts {
-    classpath = files(tasks.jar, configurations.runtimeClasspath, cli)
+    classpath = files(tasks.jar, configurations.runtimeClasspath, cli, allDrivers)
 }
 
 distributions {
@@ -106,6 +147,7 @@ distributions {
         contents {
             into("lib") {
                 from(cli)
+                from(allDrivers)
                 duplicatesStrategy = DuplicatesStrategy.EXCLUDE
             }
         }

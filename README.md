@@ -31,18 +31,21 @@ Each row is a `LinkedHashMap` keyed by column label, in column order. A failed q
 
 ### Use it from the command line
 
-Build the fat jar once:
+Build a fat jar once. It bundles every driver (about 100 MB), or only the ones you name:
 
 ```
-./gradlew shadowJar
+./gradlew shadowJar                          # all drivers, pourover-sql-<version>-all.jar
+./gradlew shadowJar -Pengines=postgres,mysql # slim, pourover-sql-<version>-postgres-mysql.jar
 ```
+
+Engine names: `postgres`, `mysql`, `sqlserver`, `snowflake`, `redshift`, `informix`.
 
 Then run a query and write the result:
 
 ```
 export EXTRACT_DB_PASSWORD='<password>'
 echo 'SELECT * FROM users' > users.sql
-java -jar build/libs/pourover-sql-<version>-all.jar \
+java -jar build/libs/pourover-sql-<version>-postgres-mysql.jar \
     --type postgres --user app --database main \
     --sql users.sql --file users.jsonl --case snake
 ```
@@ -59,7 +62,18 @@ cd pourover-sql
 ./gradlew build
 ```
 
-That runs the unit tests, compiles the examples and writes the library jar to `build/libs/`. `./gradlew shadowJar` writes the runnable fat jar next to it (`pourover-sql-<version>-all.jar`).
+That runs the unit tests, compiles the examples and writes the library jar to `build/libs/`. `./gradlew shadowJar` writes the runnable fat jar next to it (see above for choosing drivers).
+
+JDBC drivers are optional. The library depends only on `slf4j-api` and Gson, so add the driver for your database yourself. For Postgres in Gradle:
+
+```kotlin
+dependencies {
+    implementation("io.github.chetmancini:pourover-sql:<version>")
+    runtimeOnly("org.postgresql:postgresql:42.7.14")
+}
+```
+
+Without the driver, `Pourover.connect` throws an `IllegalStateException` that names the missing artifact. Coordinates per engine are in [docs/drivers.md](docs/drivers.md).
 
 The library will be available as `io.github.chetmancini:pourover-sql` with the first release. That is not out yet, so do not add it to a build file today.
 

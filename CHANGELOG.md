@@ -15,6 +15,7 @@
 
 ### Changed
 
+- JDBC drivers are optional: the library POM lists only `slf4j-api` and Gson, applications add the driver they use, and a missing driver fails with an `IllegalStateException` naming the artifact. The CLI fat jar bundles all drivers or a subset (`./gradlew shadowJar -Pengines=postgres,mysql`).
 - The Java API is rebuilt around records and `Pourover`; see the migration table below.
 - The package moved from `com.simondata.pouroversql` to `io.github.chetmancini.pouroversql`.
 - Gradle Kotlin DSL, Java 21, JUnit 6 (Jupiter API) and AssertJ.
