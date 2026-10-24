@@ -136,6 +136,13 @@ tasks.register("fatJar") {
 }
 
 publishing {
+    repositories {
+        // Local dry-run target used by the release workflow; nothing is published remotely.
+        maven {
+            name = "staging"
+            url = uri(layout.buildDirectory.dir("staging-repo"))
+        }
+    }
     publications {
         create<MavenPublication>("mavenJava") {
             artifactId = "pourover-sql"
