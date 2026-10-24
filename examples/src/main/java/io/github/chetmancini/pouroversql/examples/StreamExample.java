@@ -44,11 +44,13 @@ public final class StreamExample {
         }
 
         Pourover db = Pourover.of(dataSource);
+        // snippet:start stream
         try (RowStream stream = db.stream("SELECT \"N\" FROM numbers")) {
             long evens = stream.rows()
                     .filter(row -> ((Number) row.get("N")).longValue() % 2 == 0)
                     .count();
             System.out.println("Even numbers between 1 and 100000: " + evens);
         }
+        // snippet:end stream
     }
 }

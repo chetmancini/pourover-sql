@@ -35,6 +35,19 @@ dependencies {
     implementation(project(":"))
     implementation(libs.h2) // compile-time: the examples build an H2 JdbcDataSource
     runtimeOnly(libs.slf4j.simple)
+
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.assertj.core)
+    testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+// Checks that the snippets marked in the example sources appear verbatim in README.md.
+tasks.test {
+    useJUnitPlatform()
+    inputs.file(rootProject.file("README.md"))
+    systemProperty("readme.path", rootProject.file("README.md").absolutePath)
+    systemProperty("examples.sources", file("src/main/java").absolutePath)
 }
 
 // Pick the example with: ./gradlew :examples:run -PmainClass=io.github.chetmancini.pouroversql.examples.ListExample

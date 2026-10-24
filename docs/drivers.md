@@ -12,15 +12,22 @@
 
 ## Athena
 
-The official AWS driver is distributed from AWS (S3 download), not Maven Central, so it is not bundled.
-Download the driver jar from the AWS Athena JDBC documentation and put it on the runtime classpath:
+Athena is user-supplied. The official AWS driver is distributed from AWS (an S3 download linked from the Athena JDBC documentation), not Maven Central, so Pour-Over does not bundle it.
 
-- Library use: add the jar to your application's runtime classpath.
-- CLI use: `java -cp pourover-sql-all.jar:/path/to/athena-jdbc.jar io.github.chetmancini.pouroversql.ExtractorRunner ...`
+- Driver class: `com.amazon.athena.jdbc.AthenaDriver`.
+- URL schemes: `jdbc:athena` (preferred) and `jdbc:awsathena` (deprecated, still accepted by the driver).
 
-`AwsAthenaClient` takes the full JDBC URL as the host (for example
-`jdbc:athena://region=us-east-1;Workgroup=primary`) and connects through `DriverManager`,
-so no vendor class is needed at compile time.
+`AwsAthenaClient` takes the full JDBC URL as the host (for example `jdbc:athena://region=us-east-1;Workgroup=primary`) and connects through `DriverManager`, so no vendor class is needed at compile time. Other connection properties go in `ConnectionParams.properties` (`--custom key=value` on the CLI) and are passed to the driver.
+
+Supply the jar on the classpath:
+
+- CLI, with the fat jar: `java -cp pourover-sql-<version>-all.jar:/path/to/athena-jdbc.jar io.github.chetmancini.pouroversql.cli.PouroverCommand --type athena --host 'jdbc:athena://region=us-east-1;Workgroup=primary' ...` (use `;` instead of `:` between jars on Windows). `-jar` ignores `-cp`, which is why the main class is named explicitly.
+- Library, in a Gradle build: `runtimeOnly(files("libs/athena-jdbc.jar"))`, or the Maven coordinates of the driver if you host it in your own repository.
+
+## Engine notes
+
+- **Redshift.** The `language` connection property no longer exists in the Redshift 2.x driver, so it was dropped. Other properties are passed to the driver as is.
+- **Snowflake.** The host must be the account URL, `<account>.snowflakecomputing.com`. The client builds `jdbc:snowflake://<host>[:<port>]` from it and sets the database as the `db` property. Properties such as `warehouse` and `role` are passed to the driver.
 
 ## Notes
 

@@ -1,143 +1,174 @@
 # Pour-Over SQL
 
-## Project and Rationale
+[![CI](https://github.com/chetmancini/pourover-sql/actions/workflows/ci.yml/badge.svg)](https://github.com/chetmancini/pourover-sql/actions/workflows/ci.yml)
+<!-- The CI badge starts working after the first push of the workflow to GitHub. -->
 
-SQL has become one the most important ways to describe and query data in large data systems and the need for simple SQL interfaces is more important than ever. 
-However, most Java SQL projects are designed around Object Relational Mappings. 
-While this is powerful it does not allow the flexibility for dynamic queries.
+Pour-Over SQL runs a SQL query against a JDBC database and gives you the rows: as a list, as a stream you read one row at a time, or as a JSONL or CSV file. It is a Java library and a command-line tool. You write the SQL, it handles the connection, the fetch size, the cleanup and the file format. It has no mapping layer and no query builder, so it suits dynamic queries, exports and one-off extracts.
 
-While there are various packages on the market, generally querying a database as a Java developer is much more complex than writing basic queries in languages like Python or PHP.
+## Quickstart
 
-The original rationale for this project was to design a flexible way to connect to various JDBC data sources, run arbitrary queries, return line delimited JSON for later storage and processing.
+### Try it in the browser (about a minute)
 
-The project has evolved and now offers a variety of features that offer power, scalability, and flexibility when querying SQL from a JVM project or directly from the command line.
+You need Java 21. From a clone of this repository:
 
-More info: http://jsonlines.org/
-
-### Key Features
-* Built in support for major databases (see below for full list)
-* Can be used as a library in your application or directly on command line with a provided runner.
-* Queries can be retrieved as a data structure, offered row-by-row to a callback, or serialized to a file.
-* Files can be CSV or JSONL
-
-### Author and Contributors
-Originally created at Simon Data, Inc., reboot by Chet Mancini. Offered without warranty.
-
-## Installation
-
-### System Dependencies
-* Gradle
-* Java 8
-
-### Build
-Build 'uberjar' to run as a standalone app.
-```$sh
-gradle shadowJar
+```
+./gradlew :demo:run
 ```
 
-Generate sources jar to `/build/libs` 
-```$sh
-gradle sources
+Then open <http://localhost:8080>. Type a `SELECT` against the sample coffee-orders tables, and the page shows the JSONL, the CSV and the Java call for it. It runs on an in-memory H2 database, so there is no Docker and no setup. Set `PORT` to use another port. More in [demo/README.md](demo/README.md).
+
+### Use it as a library
+
+Connect to a database and list rows:
+
+```java
+Pourover db = Pourover.connect(SqlEngine.POSTGRESQL,
+        new ConnectionParams("localhost", 5432, "app", password, "main"));
+List<Map<String, Object>> users = db.list("SELECT * FROM users");
 ```
 
-Generate javadoc to `build/docs`
-```$sh
-gradle javadoc
+Each row is a `LinkedHashMap` keyed by column label, in column order. A failed query throws an unchecked `QueryException`. Runnable versions of the snippets in this README are in [examples/](examples/README.md).
+
+### Use it from the command line
+
+Build the fat jar once:
+
+```
+./gradlew shadowJar
 ```
 
-## Usage
-### API Documentation
+Then run a query and write the result:
 
-Javadoc: coming soon.
+```
+export EXTRACT_DB_PASSWORD='<password>'
+echo 'SELECT * FROM users' > users.sql
+java -jar build/libs/pourover-sql-<version>-all.jar \
+    --type postgres --user app --database main \
+    --sql users.sql --file users.jsonl --case snake
+```
 
-### Use as a library
+Add `--dry` to print the parameters (with the password redacted) without connecting.
 
-```$java
-Pourover db = Pourover.connect(engine, new ConnectionParams(host, port, user, password, database));
+## Install
 
-List<Map<String, Object>> records = db.list("select * from table");
+Nothing is published yet. For now, build from source with the Gradle wrapper (Java 21):
 
-try (RowStream rows = db.stream("select * from big_table")) {
-    rows.rows().forEach(row -> System.out.println(row));
+```
+git clone https://github.com/chetmancini/pourover-sql.git
+cd pourover-sql
+./gradlew build
+```
+
+That runs the unit tests, compiles the examples and writes the library jar to `build/libs/`. `./gradlew shadowJar` writes the runnable fat jar next to it (`pourover-sql-<version>-all.jar`).
+
+The library will be available as `io.github.chetmancini:pourover-sql` with the first release. That is not out yet, so do not add it to a build file today.
+
+## Using the library
+
+`Pourover.connect(engine, params)` builds a connection for one of the supported engines. If you already have a `DataSource` (a pool, or a test database), wrap it with `Pourover.of(dataSource)`; Pour-Over never closes a data source you gave it.
+
+`list` returns every row in memory:
+
+```java
+Pourover db = Pourover.of(dataSource);
+List<Map<String, Object>> rows = db.list("SELECT * FROM beans ORDER BY \"Score\" DESC");
+```
+
+`stream` reads rows one at a time. Close the stream (try-with-resources) to release the connection:
+
+```java
+try (RowStream stream = db.stream("SELECT \"N\" FROM numbers")) {
+    long evens = stream.rows()
+            .filter(row -> ((Number) row.get("N")).longValue() % 2 == 0)
+            .count();
+    System.out.println("Even numbers between 1 and 100000: " + evens);
 }
-
-db.writeTo("select * from table", Path.of("out.jsonl"), OutputFormat.JSONL);
 ```
 
-### Use as a command line application
-Required Parameters:
-* `-u` `--user`: The username to connect with (required)
-* `-t` `--type`: The engine type to use (See full list below)
-* `-d` `--database`: The database name
-* `-s` `--sql`: The path to the input SQL
+`writeTo` writes JSONL or CSV, with optional key-case conversion:
 
-Optional Parameters:
-* `-h` `--host`: The host to connect to (defaults to `localhost`)
-* `--key-case`: The case to apply to the keys (defaults to query values, `default`|`snake`|`camel`)
-* `-p` `--port`: The port to connect to (defaults to the standard port for the given engine e.g. `3306` for MySQL)
-* `-f` `--file`: The output file to write to (defaults to a basic filename)
-* `--dry`: Flag to show whether to just print out the input or whether to actually run the query.
-
-Custom Parameters
-* `-custom <key>=<value>`: For specific engines custom parameters may be provided
-
-Passwords are passed by TTY input or passed through a `EXTRACT_DB_PASSWORD` environment variable.
-
-```$sh
-java -jar build/libs/pouroversql/pourover-sql-<VERSION>.jar \
-    --user <USERNAME> \
-    --host <HOST> \
-    --port <PORT> (optional, defaults to default port)\
-    --database <DATABASE NAME> \
-    --type <TYPE> (sqlserver, mysql...see full list below) \
-    --case <CASE> (default, snake, camel)
-    --sql /path/to/query.sql \
-    --file /path/to/outputfile.jsonl
+```java
+Path jsonl = db.writeTo("SELECT * FROM cups", dir.resolve("cups.jsonl"), OutputFormat.JSONL, snake);
+Path csv = db.writeTo("SELECT * FROM cups", dir.resolve("cups.csv"), OutputFormat.CSV, snake);
 ```
 
-### Tests
-```$sh
-gradle test
+`forEach` hands each row to a `Consumer` and returns the row count. `QueryOptions` sets fetch size, max rows and timeout; `FormatOptions` sets the key case (`DEFAULT`, `SNAKE`, `CAMEL`).
+
+Queries run with autocommit off and are rolled back, so a query with side effects does not leave its writes behind. Pour-Over is for reading.
+
+Generate the Javadoc with `./gradlew javadoc`; it lands in `build/docs/javadoc`.
+
+## Supported engines
+
+| Engine | `--type` values | JDBC driver | End-to-end tested |
+|---|---|---|---|
+| PostgreSQL | `postgresql`, `postgres` | bundled | yes |
+| MySQL / MariaDB | `mysql`, `mariadb` | bundled | yes |
+| SQL Server / Azure SQL | `sqlserver`, `azure`, `mssql` | bundled | no |
+| Snowflake | `snowflake` | bundled | no |
+| Amazon Redshift | `redshift` | bundled | no |
+| Informix | `informix` | bundled | no |
+| Amazon Athena | `athena` | you supply it | no |
+
+"End-to-end tested" means the test suite runs queries against a real server in Testcontainers (`./gradlew e2eTest`, needs Docker). The other engines are covered by unit tests only and have not been exercised against a live server. Default ports, URL shapes and notes per engine are in [docs/engines.md](docs/engines.md); driver details, including how to add the Athena driver, are in [docs/drivers.md](docs/drivers.md).
+
+`ORACLE` and `BIGQUERY` exist as names but have no client; they throw `IllegalArgumentException`.
+
+## Command-line reference
+
+```
+java -jar pourover-sql-<version>-all.jar [options]
 ```
 
-## Additional Information
+| Flag | Default | Description |
+|---|---|---|
+| `-u`, `--user` | none (required) | Database user. |
+| `-h`, `--host` | `localhost` | Database host. For Athena, the full JDBC URL. |
+| `-p`, `--port` | the engine's default port | Database port. |
+| `-d`, `--database` | none | Database name. |
+| `-t`, `--type` | `SQLSERVER` | Engine, from the table above. |
+| `-s`, `--sql` | stdin | Path of the file holding the SQL. Reads standard input when absent. |
+| `-f`, `--file` | `query_result.json` | Output file. |
+| `--format` | `json` | `json` (one JSON object per line) or `csv`. |
+| `-c`, `--case` | `DEFAULT` | Key case: `DEFAULT` (column labels as returned), `snake` or `camel`. |
+| `--fetchsize` | `10000` | JDBC fetch size. Must be greater than zero. |
+| `--maxrows` | no limit | Maximum rows to write. Must be greater than zero. |
+| `--timeout` | no timeout | Query timeout in seconds. Must be greater than zero. |
+| `--custom` | none | Engine property as `key=value`; repeat for more. See `ConnectionParams` in the Javadoc for the keys. |
+| `--dry` | off | Print connection, query and format options (password redacted), then exit `0`. |
+| `--help` | | Show usage. |
+| `--version` | | Print the version. |
 
-### Security
+Exit codes: `0` success, `1` the query or the output file failed (the message goes to stderr), `2` usage error (bad option value, unknown `--type`, `--format` or `--case`, or no password available).
 
-Passwords can be passed via an environment variable: `EXTRACT_DB_PASSWORD`, 
-however, the preferred method is to use the password console prompt.
+The password comes from the `EXTRACT_DB_PASSWORD` environment variable, or a console prompt when that is unset. With neither, the command exits `2`. There is no password flag, on purpose: it would end up in shell history and process listings.
 
-### Supported Databases
+## Why Pour-Over SQL
 
-* Snowflake: `snowflake`
-* Microsoft SQLServer: `sqlserver`
-* Microsoft Azure (same driver): `azure`
-* MySQL / MariaDB: `mysql`
-* PostgreSQL: `postgresql`
-* Amazon Redshift: `redshift`
-* Amazon Athena: `athena`
-* Informix `informix`
+Most Java database libraries are built around mapping rows to objects. That is the wrong tool when the query is not known until runtime, or when you just want the result in a file. Pour-Over keeps to the small job of running SQL and returning or writing rows, and it does the parts that are easy to get wrong: streaming with a cursor where the driver supports it, closing connections, quoting CSV, rendering dates as ISO-8601, and not putting the password in an error message.
 
-In future we may add drivers support for the following:
-* Sybase
-* Microsoft Access
-* Firebird/ Interbase
-* IBM DB2
-* Google BigQuery
+## What it is not
 
-The following will be straightforward to implement by a fork
-* Oracle: `oracle`
+It is not an ORM or a query builder. It does not generate SQL, map rows to classes, manage schemas or pool connections. It is not a general data-loading tool either: it reads and exports, and it rolls back whatever a query changes.
 
-Since Oracle has specific licensing restrictions, it's easiest to implement this yourself by subclassing `AbstractSQLClient`.
+## Roadmap
 
-## Custom Parameters By Engine
-### SQLServer
-* `-custom encrypt=true`
-* `-custom trustServerCertificate=true`
-* `-custom hostNameInCertificate=str`
-* `-custom accessToken=str`
-* `-custom authentication=str`
-* `-custom authenticationScheme=str`
-* `-custom columnEncryptionSetting=str`
-* `-custom failoverPartner=str`
-* `-custom integratedSecurity=true`
+Ideas, not promises:
+
+- More output formats beyond JSONL and CSV.
+- Splitting output across several files by row count or file size.
+- More control over JSON serialization.
+
+Known limitations of the current code are listed in the [changelog](CHANGELOG.md).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). To report a security problem, see [SECURITY.md](SECURITY.md).
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE).
+
+## Attribution
+
+Originally created at Simon Data, Inc., reboot by Chet Mancini. Existing source files keep their original Simon Data, Inc. copyright and license notices; new work is Copyright 2026 Chet Mancini. See [NOTICE](NOTICE). Offered without warranty.

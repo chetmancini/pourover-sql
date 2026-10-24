@@ -2,7 +2,38 @@
 
 ## 1.0.0 (unreleased)
 
-### Playground
+### Added
+
+- `Pourover`, a single entry point with `list`, `forEach`, `stream` and `writeTo`, plus the `ConnectionParams`, `QueryOptions`, `FormatOptions`, `KeyCase`, `OutputFormat`, `QueryException`, `RowStream` and `RowFormatter` types.
+- A picocli command line with `--help`, `--version`, `--format`, `--fetchsize`, `--timeout`, `--maxrows` and repeatable `--custom key=value`, and exit codes `0`, `1` and `2`.
+- A browser playground on in-memory H2 (`./gradlew :demo:run`) and runnable examples in `examples/`.
+- Unit tests on H2 and an opt-in end-to-end suite for PostgreSQL and MySQL in Testcontainers (`./gradlew e2eTest`).
+- A test that fails when the README snippets drift from the compiled examples.
+- GitHub Actions workflows (CI, release dry run, Javadoc to Pages on manual dispatch), Dependabot, sources and Javadoc jars, `SECURITY.md`, `docs/drivers.md` and `docs/engines.md`.
+
+### Changed
+
+- The Java API is rebuilt around records and `Pourover`; see the migration table below.
+- The package moved from `com.simondata.pouroversql` to `io.github.chetmancini.pouroversql`.
+- Gradle Kotlin DSL, Java 21, JUnit 5 and AssertJ.
+- Behavior changes you may notice (details below): rows are plain `LinkedHashMap`s, JSON output is not HTML-escaped, dates and times are ISO-8601, key-case collisions throw, errors are thrown instead of logged, queries run with autocommit off and are rolled back, CLI exit codes, the CLI no longer forces logging to TRACE, and the Athena driver is user-supplied.
+
+### Removed
+
+- `SQLExtractor` (no deprecated shim), `SQLParams` and its engine subclasses, `QueryParams`, `FormattingParams`, `KeyCaseFormat`, `FileOutputFormat`, `RowHandler`.
+- commons-cli, Guava, commons-collections, commons-text and commons-dbutils.
+- The bundled third-party Athena driver artifact (`com.syncron.amazonaws:simba-athena-jdbc-driver`); supply it yourself (see `docs/drivers.md`).
+
+### Fixed
+
+- `--maxrows` was read under the wrong key and ignored.
+- `QueryParams(fetchSize, maxRows, timeout)` left the log frequency null because of an inverted null check.
+- The CLI failed with a `NullPointerException` when there was no password and no console; it now exits `2` with a message.
+- Query errors were logged and swallowed (`null` or `-1` returned); they now throw.
+- CSV output only quoted `String` values and only on the platform line separator; quoting now follows the rendered text.
+- Gson failed on `java.time` values under JDK 21.
+
+### Playground (details)
 
 A browser playground on in-memory H2 (`./gradlew :demo:run`) shows JSONL, CSV and the Java call for any SELECT, plus runnable examples in `examples/`; neither needs Docker or the CLI.
 
@@ -58,6 +89,7 @@ try (RowStream stream = db.stream("SELECT * FROM big_table")) {
 - **Queries run with autocommit off.** `Pourover` turns autocommit off for the query, rolls back and restores the original value before the connection is closed or returned to a pool. This makes `fetchSize` stream with a cursor on PostgreSQL, which ignores it in autocommit mode.
 - **Streams release connections.** `RowStream` closes its connection, statement and result set on `close()`, when its `Stream` is closed, or once the last row is read. `Pourover.of(DataSource)` never closes the caller's DataSource.
 - **Engine properties.** The PostgreSQL and SQL Server options formerly on `PostgreSQLSQLParams` and `SQLServerSQLParams` are read from `ConnectionParams.properties`, with the same keys and defaults: PostgreSQL connections are read-only unless `readOnly=false`, and SQL Server `encrypt` and `trustServerCertificate` default to `false`. Snowflake, Redshift and Athena now pass all properties to the driver, so Snowflake `warehouse` and `role` work. MySQL and Informix still ignore them.
+- **Athena driver is user-supplied.** The official AWS driver is not on Maven Central, so it is no longer bundled; put it on the runtime classpath (see `docs/drivers.md`).
 - **Unsupported engines throw.** `ClientFactory` throws `IllegalArgumentException` for `ORACLE` and `BIGQUERY` instead of returning `null`.
 
 ### CLI
@@ -74,3 +106,11 @@ try (RowStream stream = db.stream("SELECT * FROM big_table")) {
 - Gradle Kotlin DSL, Java 21 toolchain, JUnit 5 and AssertJ, H2-backed tests.
 - Package moved from `com.simondata.pouroversql` to `io.github.chetmancini.pouroversql`.
 - Replaced commons-cli with picocli. Dropped Guava, commons-collections, commons-text and commons-dbutils. `slf4j-simple` is now only on the CLI runtime classpath.
+
+### Known limitations
+
+- If `writeTo` fails part way (a query error or an I/O error), the partly written output file may remain on disk; the library does not delete it.
+- `byte[]` values are not rendered meaningfully in CSV: `RowFormatter` writes the array's `toString()` (something like `[B@1b6d3586`). In JSONL, Gson writes the bytes as an array of numbers. Cast or encode binary columns in SQL (for example to hex or base64) if you need them.
+- MySQL streaming with `fetchSize` needs the driver's `useCursorFetch` option, which is not enabled; without it Connector/J reads the whole result into memory.
+- The driver reads a single very large value (a big text or binary column) into memory; streaming is per row, not per value.
+- Athena, Snowflake, Redshift, Informix and SQL Server are not tested end to end; only PostgreSQL and MySQL are.

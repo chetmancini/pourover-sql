@@ -44,8 +44,10 @@ public final class ListExample {
             s.execute("INSERT INTO beans VALUES ('Sunrise Blend', 'Ethiopia', 88), ('Dusk Roast', 'Colombia', 84)");
         }
 
+        // snippet:start list
         Pourover db = Pourover.of(dataSource);
         List<Map<String, Object>> rows = db.list("SELECT * FROM beans ORDER BY \"Score\" DESC");
+        // snippet:end list
 
         for (Map<String, Object> row : rows) {
             System.out.println(row);
