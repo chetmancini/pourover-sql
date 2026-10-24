@@ -40,6 +40,8 @@ jobs:
             exit 1
           fi
 
+      # The shadow fat jar is intentionally not published to Central; only the library, sources
+      # and javadoc jars plus POM/module metadata are.
       # `build` runs the unit tests and assembles the library jar, sources jar and javadoc jar.
       - name: Build
         run: ./gradlew build

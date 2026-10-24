@@ -174,6 +174,13 @@ publishing {
     }
 }
 
+// The shadow fat jar stays a plain build artifact (fatJar/shadowJar); it is not published.
+(components["java"] as AdhocComponentWithVariants).withVariantsFromConfiguration(
+    configurations["shadowRuntimeElements"]
+) {
+    skip()
+}
+
 signing {
     // Only sign when a key is supplied; no remote publishing target is configured.
     val signingKey = providers.gradleProperty("signingKey")
