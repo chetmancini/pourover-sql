@@ -113,17 +113,4 @@ public class TextFormat {
         }
     }
 
-    /**
-     * Safely parse a string as an integer
-     * @param nullOrValue input string
-     * @return Integer representation of the string.
-     */
-    public static Integer parseInteger(String nullOrValue) {
-        if (nullOrValue == null) {
-            return null;
-        } else {
-            return Integer.parseInt(nullOrValue);
-        }
-    }
-
 }

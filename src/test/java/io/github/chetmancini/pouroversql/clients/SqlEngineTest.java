@@ -48,4 +48,19 @@ public class SqlEngineTest {
         assertEquals(SqlEngine.ORACLE, SqlEngine.byName("oracle db"));
         assertEquals(SqlEngine.INFORMIX, SqlEngine.byName("ibm informix"));
     }
+
+    @Test
+    public void engineLookupIsLocaleIndependent() {
+        java.util.Locale original = java.util.Locale.getDefault();
+        try {
+            // Turkish upper-cases 'i' to a dotted capital I, which broke "informix".
+            java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"));
+            assertEquals(SqlEngine.INFORMIX, SqlEngine.byName("informix"));
+            assertEquals(SqlEngine.SQLSERVER, SqlEngine.byName("microsoft sql server"));
+            assertEquals(SqlEngine.ATHENA, SqlEngine.byName("aws athena"));
+            assertEquals(SqlEngine.BIGQUERY, SqlEngine.byName("bigquery"));
+        } finally {
+            java.util.Locale.setDefault(original);
+        }
+    }
 }

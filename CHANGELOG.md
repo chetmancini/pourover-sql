@@ -22,7 +22,7 @@
 
 ### Removed
 
-- `SQLExtractor` (no deprecated shim), `SQLParams` and its engine subclasses, `QueryParams`, `FormattingParams`, `KeyCaseFormat`, `FileOutputFormat`, `RowHandler`.
+- `SQLExtractor` (no deprecated shim), `SQLParams` and its engine subclasses, `QueryParams`, `FormattingParams`, `KeyCaseFormat`, `FileOutputFormat`, `RowHandler`, `PrettyPrintingWriter`, `TextFormat.parseInteger` and `FileRowWriter.openStdOut` (unused).
 - commons-cli, Guava, commons-collections, commons-text and commons-dbutils.
 - The bundled third-party Athena driver artifact (`com.syncron.amazonaws:simba-athena-jdbc-driver`); supply it yourself (see `docs/drivers.md`).
 
@@ -34,6 +34,7 @@
 - Query errors were logged and swallowed (`null` or `-1` returned); they now throw.
 - CSV output only quoted `String` values and only on the platform line separator; quoting now follows the rendered text.
 - Gson failed on `java.time` values under JDK 21.
+- `SqlEngine.byName` upper-cased with the default locale, so `informix` was not found under a Turkish locale; it now uses `Locale.ROOT`.
 - Snake and camel key case split all-caps labels into single letters (`USER_ID` became `u_s_e_r_i_d`).
 - JSONL failed on `ARRAY`, `CLOB`, `BLOB` and driver-specific values, and `list()` returned LOB/array locators that stopped working once the connection closed; values are now materialized (see Behavior changes).
 

@@ -15,6 +15,7 @@ limitations under the License.
 
 package io.github.chetmancini.pouroversql.clients;
 
+import java.util.Locale;
 
 /**
  * The type of database to connect to.
@@ -32,7 +33,7 @@ public enum SqlEngine {
 
     private static String normalizeName(String name) {
         String result;
-        String cleaned = name.toUpperCase().replaceAll(" ", "_");
+        String cleaned = name.toUpperCase(Locale.ROOT).replaceAll(" ", "_");
         switch (cleaned) {
             case "AWSATHENA":
             case "AWS_ATHENA":
@@ -60,7 +61,7 @@ public enum SqlEngine {
                 result = INFORMIX.name();
                 break;
             default:
-                result = name.toUpperCase();
+                result = name.toUpperCase(Locale.ROOT);
                 break;
         }
         return result;

@@ -357,6 +357,15 @@ class PouroverTest {
     }
 
     @Test
+    void forEachReturnsZeroOnEmptyResult() throws Exception {
+        ds.exec("CREATE TABLE t (n INT)");
+        List<Object> seen = new ArrayList<>();
+        assertThat(pourover.forEach("SELECT n FROM t", seen::add)).isZero();
+        assertThat(seen).isEmpty();
+        assertThat(ds.allConnectionsClosed()).isTrue();
+    }
+
+    @Test
     void emptyResultWritesEmptyJsonl() throws Exception {
         ds.exec("CREATE TABLE t (v VARCHAR(50))");
         assertThat(writeToString("SELECT v FROM t", OutputFormat.JSONL)).isEmpty();

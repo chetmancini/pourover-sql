@@ -86,13 +86,6 @@ public abstract class FileRowWriter extends AbstractRowWriter implements RowWrit
         this.postOpenHook();
     }
 
-    /**
-     * Open Stdout as an OutputStream.
-     */
-    public void openStdOut() {
-        this.open(System.out);
-    }
-
     protected void postOpenHook() {
 
     }
