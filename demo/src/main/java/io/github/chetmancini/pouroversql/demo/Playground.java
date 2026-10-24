@@ -466,9 +466,9 @@ public final class Playground {
             }
             String clean;
             try {
-                clean = blankCommentsAndLiterals(sql).strip();
+                clean = blankLiterals(sql).strip();
             } catch (UnsupportedSyntaxException e) {
-                return "Unsupported syntax: " + e.getMessage() + ".";
+                return e.getMessage();
             }
             while (clean.endsWith(";")) {
                 clean = clean.substring(0, clean.length() - 1).stripTrailing();
@@ -503,39 +503,27 @@ public final class Playground {
         }
 
         /**
-         * Replaces comments with a space and the inside of '...' literals with nothing; keeps "..."
-         * identifiers. H2 also lexes dollar-quoted strings, // comments and other forms this scanner
-         * does not model, so any of those (and any unterminated quote or comment) is rejected rather
-         * than guessed at: a scanner that disagrees with H2 about where a literal ends can be used to
+         * Blanks the inside of '...' literals and keeps "..." identifiers. Comments (which H2 nests),
+         * dollar-quoted strings, // and other forms this scanner does not model are rejected, as is any
+         * unterminated quote, rather than guessed at: a scanner that disagrees with H2 about where a literal ends can be used to
          * hide a second statement or a forbidden function.
          */
-        static String blankCommentsAndLiterals(String sql) {
+        static String blankLiterals(String sql) {
             StringBuilder out = new StringBuilder(sql.length());
             int i = 0;
             int n = sql.length();
             while (i < n) {
                 char c = sql.charAt(i);
                 char next = i + 1 < n ? sql.charAt(i + 1) : '\0';
-                if (c == '-' && next == '-') {
-                    // H2 ends a line comment at \n or \r.
-                    while (i < n && sql.charAt(i) != '\n' && sql.charAt(i) != '\r') {
-                        i++;
-                    }
-                    out.append(' ');
-                } else if (c == '/' && next == '*') {
-                    int end = sql.indexOf("*/", i + 2);
-                    if (end < 0) {
-                        throw new UnsupportedSyntaxException("unterminated /* comment");
-                    }
-                    i = end + 2;
-                    out.append(' ');
+                if (c == '-' && next == '-' || c == '/' && next == '*') {
+                    throw new UnsupportedSyntaxException("Comments are not supported in the playground.");
                 } else if (c == '/' && next == '/') {
-                    throw new UnsupportedSyntaxException("// comments are not supported");
+                    throw new UnsupportedSyntaxException("Unsupported syntax: // comments are not supported.");
                 } else if (c == '$' && next == '$') {
-                    throw new UnsupportedSyntaxException("$$ quoting is not supported");
+                    throw new UnsupportedSyntaxException("Unsupported syntax: $$ quoting is not supported.");
                 } else if (c == '`' || c == '\\' || c == '\0') {
-                    throw new UnsupportedSyntaxException("the character " + (c == '\0' ? "NUL" : String.valueOf(c))
-                            + " is not supported");
+                    throw new UnsupportedSyntaxException("Unsupported syntax: the character "
+                            + (c == '\0' ? "NUL" : String.valueOf(c)) + " is not supported.");
                 } else if (c == '\'') {
                     out.append("''");
                     i = endOfQuoted(sql, i, '\'') + 1;
@@ -565,7 +553,7 @@ public final class Playground {
                 }
                 i++;
             }
-            throw new UnsupportedSyntaxException("unterminated " + quote + " quote");
+            throw new UnsupportedSyntaxException("Unsupported syntax: unterminated " + quote + " quote.");
         }
     }
 
@@ -700,12 +688,13 @@ public final class Playground {
                 if (in == null) {
                     throw new IOException("seed.sql is missing from the classpath");
                 }
-                // The licence header contains semicolons, so drop it before splitting.
+                // The licence header and the -- notes may contain semicolons, so drop them before splitting.
                 String script = new String(in.readAllBytes(), StandardCharsets.UTF_8)
-                        .replaceFirst("(?s)^\\s*/\\*.*?\\*/", "");
+                        .replaceFirst("(?s)^\\s*/\\*.*?\\*/", "")
+                        .replaceAll("(?m)^--.*$", "");
                 List<String> statements = new ArrayList<>();
                 for (String part : script.split(";[ \\t]*\\r?\\n")) {
-                    if (!SqlGuard.blankCommentsAndLiterals(part).isBlank()) {
+                    if (!part.isBlank()) {
                         statements.add(part);
                     }
                 }

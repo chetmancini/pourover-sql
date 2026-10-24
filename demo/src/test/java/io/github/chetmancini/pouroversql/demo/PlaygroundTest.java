@@ -154,8 +154,8 @@ class PlaygroundTest {
     }
 
     @Test
-    void commentsBeforeSelectAreAllowed() throws Exception {
-        assertThat(post("-- orders\n/* all */ SELECT 1 AS One;").statusCode()).isEqualTo(200);
+    void trailingSemicolonAndWithAreAllowed() throws Exception {
+        assertThat(post("SELECT 1 AS One;").statusCode()).isEqualTo(200);
         assertThat(post("WITH t AS (SELECT 1 AS A) SELECT * FROM t").statusCode()).isEqualTo(200);
     }
 
@@ -191,7 +191,7 @@ class PlaygroundTest {
         HttpResponse<String> response = post("SELECT 1; DROP TABLE orders");
         assertThat(response.statusCode()).isEqualTo(400);
         assertThat(json(response).get("error").getAsString()).containsIgnoringCase("one statement");
-        assertThat(post("SELECT 1; -- done").statusCode()).isEqualTo(200);
+        assertThat(post("SELECT 1;  ").statusCode()).isEqualTo(200);
         assertThat(post("SELECT 1; SELECT 2").statusCode()).isEqualTo(400);
     }
 
@@ -252,6 +252,71 @@ class PlaygroundTest {
         assertThatThrownBy(() -> new Socket(external, playground.port()).close()).isInstanceOf(IOException.class);
     }
 
+    private static String guardError(HttpResponse<String> response) {
+        return json(response).get("error").getAsString();
+    }
+
+    @Test
+    void nestedBlockCommentDesyncIsRejected() throws Exception {
+        // H2 nests block comments; a scanner that ends one at the first */ disagrees with it.
+        for (String sql : List.of(
+                "SELECT 1 /* /* */ ' */ ; INSERT INTO SHOP.DRINKS VALUES ('Hacked', 1, FALSE); -- '",
+                "SELECT 1 /* /* */ ' */ , FILE_READ('/etc/hosts') -- '",
+                "SELECT 1 /* /* */ ' */ ; DROP TABLE SHOP.ORDERS; SET QUERY_TIMEOUT 0; -- '")) {
+            HttpResponse<String> response = post(sql);
+            assertThat(response.statusCode()).as(sql).isEqualTo(400);
+            assertThat(guardError(response)).as(sql).contains("Comments are not supported in the playground");
+        }
+        assertThat(json(post("SELECT COUNT(*) AS N FROM drinks WHERE \"DrinkName\" = 'Hacked'")).get("jsonl")
+                .getAsString()).contains("\"N\":0");
+        assertThat(json(post("SELECT COUNT(*) AS N FROM orders")).get("jsonl").getAsString()).contains("\"N\":8");
+    }
+
+    @Test
+    void lineCommentIsRejected() throws Exception {
+        for (String sql : List.of("SELECT 1 -- hi", "-- first\nSELECT 1", "SELECT 1 --")) {
+            HttpResponse<String> response = post(sql);
+            assertThat(response.statusCode()).as(sql).isEqualTo(400);
+            assertThat(guardError(response)).as(sql).contains("Comments are not supported in the playground");
+        }
+    }
+
+    @Test
+    void blockCommentIsRejected() throws Exception {
+        for (String sql : List.of("SELECT 1 /* hi */", "/* first */ SELECT 1", "SELECT 1 /* open")) {
+            HttpResponse<String> response = post(sql);
+            assertThat(response.statusCode()).as(sql).isEqualTo(400);
+            assertThat(guardError(response)).as(sql).contains("Comments are not supported in the playground");
+        }
+    }
+
+    @Test
+    void commentMarkersInsideStringLiteralsStillWork() throws Exception {
+        HttpResponse<String> response = post("SELECT 'a--b' AS A, '/* x */' AS B, 'it''s -- ok' AS C");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(json(response).get("jsonl").getAsString()).contains("a--b").contains("/* x */").contains("it's -- ok");
+    }
+
+    @Test
+    void commentMarkersInsideQuotedIdentifiersStillWork() throws Exception {
+        HttpResponse<String> response = post("SELECT 1 AS \"a--b\", 2 AS \"/* x */\", 3 AS \"q\"\"--\"");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(json(response).get("jsonl").getAsString()).contains("\"a--b\":1").contains("\"/* x */\":2");
+    }
+
+    @Test
+    void backslashInsideALiteralIsNotAnEscapeForTheGuardOrH2() throws Exception {
+        // H2 reads 'a\' as the text a\ ; the guard must agree, so the ; that follows is seen as code.
+        HttpResponse<String> ok = post("SELECT 'a\\' AS A");
+        assertThat(ok.statusCode()).isEqualTo(200);
+        assertThat(json(ok).get("jsonl").getAsString()).contains("a\\\\");
+        HttpResponse<String> two = post("SELECT 'a\\'; SELECT 2");
+        assertThat(two.statusCode()).isEqualTo(400);
+        assertThat(guardError(two)).containsIgnoringCase("one statement");
+        assertThat(post("SELECT U&'\\0041' AS A").statusCode()).isEqualTo(200);
+        assertThat(post("SELECT U&'\\0027' AS A; SELECT 2").statusCode()).isEqualTo(400);
+    }
+
     @Test
     void dollarQuoteDesyncCannotHideSecondStatement() throws Exception {
         for (String sql : List.of("SELECT $$'$$; DROP TABLE SHOP.T -- '", "SELECT $$ ; SELECT 2")) {
@@ -279,12 +344,12 @@ class PlaygroundTest {
     void carriageReturnEndsALineCommentSoItCannotHideASecondStatement() throws Exception {
         HttpResponse<String> response = post("SELECT 1 --x\r; DROP TABLE orders");
         assertThat(response.statusCode()).isEqualTo(400);
-        assertThat(json(response).get("error").getAsString()).containsIgnoringCase("one statement");
+        assertThat(json(response).get("error").getAsString()).containsIgnoringCase("Comments are not supported");
     }
 
     @Test
     void unterminatedQuotesAndCommentsAreRejected() throws Exception {
-        for (String sql : List.of("SELECT 'abc", "SELECT \"abc", "SELECT 1 /* never closed")) {
+        for (String sql : List.of("SELECT 'abc", "SELECT \"abc")) {
             HttpResponse<String> response = post(sql);
             assertThat(response.statusCode()).as(sql).isEqualTo(400);
             assertThat(json(response).get("error").getAsString()).as(sql).containsIgnoringCase("unsupported syntax");
@@ -300,7 +365,7 @@ class PlaygroundTest {
     @Test
     void normalQueriesWithQuotedDollarsAndSlashesStillWork() throws Exception {
         HttpResponse<String> response = post(
-                "SELECT '$$' AS A, 'a//b' AS B, 'it''s' AS C /* $$ and // are fine in comments */\n-- // and $$ too\n");
+                "SELECT '$$' AS A, 'a//b' AS B, 'it''s' AS C");
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(json(response).get("jsonl").getAsString()).contains("\"A\":\"$$\"").contains("a//b");
     }
