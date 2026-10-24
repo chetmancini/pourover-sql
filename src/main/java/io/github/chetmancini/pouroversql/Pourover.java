@@ -33,6 +33,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -243,6 +244,7 @@ public final class Pourover {
         try (Connection connection = dataSource.getConnection();
              PreparedStatement statement = prepare(connection, sql, o);
              ResultSet resultSet = statement.executeQuery()) {
+            writer.begin(columnKeys(resultSet, fo));
             long count = 0;
             while (resultSet.next()) {
                 writer.writeRow(fo.formatKeys(ResultSets.toMap(resultSet)));
@@ -255,6 +257,15 @@ public final class Pourover {
         } catch (SQLException e) {
             throw QueryException.wrap(e, secret);
         }
+    }
+
+    /** Output keys for the result's columns, with key case (and its collision check) applied. */
+    private static List<String> columnKeys(ResultSet resultSet, FormatOptions fo) throws SQLException {
+        Map<String, Object> labels = new LinkedHashMap<>();
+        for (String label : ResultSets.columnLabels(resultSet)) {
+            labels.put(label, null);
+        }
+        return new ArrayList<>(fo.formatKeys(labels).keySet());
     }
 
     private static PreparedStatement prepare(Connection connection, String sql, QueryOptions o) throws SQLException {

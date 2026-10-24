@@ -15,6 +15,7 @@
  */
 package io.github.chetmancini.pouroversql;
 
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -47,13 +48,24 @@ public record FormatOptions(KeyCase keyCase) {
      * With {@link KeyCase#DEFAULT} the same map is returned.
      * @param row a row keyed by column label
      * @return the row with converted keys
+     * @throws IllegalStateException if two labels convert to the same key (for example
+     *         {@code userId} and {@code user_id} under {@link KeyCase#SNAKE})
      */
     public Map<String, Object> formatKeys(Map<String, Object> row) {
         if (keyCase == KeyCase.DEFAULT) {
             return row;
         }
         Map<String, Object> result = new LinkedHashMap<>(row.size() * 2);
-        row.forEach((key, value) -> result.put(keyCase.apply(key), value));
+        Map<String, String> sources = new HashMap<>(row.size() * 2);
+        row.forEach((key, value) -> {
+            String converted = keyCase.apply(key);
+            String previous = sources.putIfAbsent(converted, key);
+            if (previous != null) {
+                throw new IllegalStateException("Columns '" + previous + "' and '" + key
+                        + "' both map to key '" + converted + "' under " + keyCase + " key case");
+            }
+            result.put(converted, value);
+        });
         return result;
     }
 }

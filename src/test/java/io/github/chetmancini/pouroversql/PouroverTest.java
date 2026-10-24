@@ -220,6 +220,45 @@ class PouroverTest {
     }
 
     @Test
+    void emptyResultWritesCsvHeaderOnly() throws Exception {
+        ds.exec("CREATE TABLE t (id INT, v VARCHAR(50))");
+        String sql = "SELECT id AS \"FirstName\", v AS \"v\" FROM t";
+        assertThat(writeToString(sql, OutputFormat.CSV, new FormatOptions(KeyCase.SNAKE)))
+                .isEqualTo("first_name,v" + NL);
+        assertThat(writeToString(sql, OutputFormat.JSONL)).isEmpty();
+        assertThat(ds.allConnectionsClosed()).isTrue();
+    }
+
+    @Test
+    void keyCaseCollisionThrows() throws Exception {
+        Map<String, Object> row = new java.util.LinkedHashMap<>();
+        row.put("userId", 1);
+        row.put("user_id", 2);
+        assertThatThrownBy(() -> new FormatOptions(KeyCase.SNAKE).formatKeys(row))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("userId").hasMessageContaining("user_id");
+
+        ds.exec("CREATE TABLE t (a INT, b INT)", "INSERT INTO t VALUES (1, 2)");
+        String sql = "SELECT a AS \"userId\", b AS \"user_id\" FROM t";
+        assertThatThrownBy(() -> pourover.writeTo(sql, tempDir.resolve("c.jsonl"), OutputFormat.JSONL,
+                new FormatOptions(KeyCase.SNAKE))).isInstanceOf(IllegalStateException.class);
+        assertThat(ds.allConnectionsClosed()).isTrue();
+    }
+
+    @Test
+    void streamClosesConnectionWhenReadFails() throws Exception {
+        // Lazy execution makes H2 evaluate each row on next(), so row 2 fails mid-stream.
+        H2DataSource lazy = new H2DataSource(";LAZY_QUERY_EXECUTION=1");
+        lazy.exec("CREATE TABLE t (n INT)", "INSERT INTO t VALUES (1), (2), (3)");
+        List<Object> seen = new ArrayList<>();
+        RowStream stream = Pourover.of(lazy).stream("SELECT 10 / (n - 2) AS \"q\" FROM t");
+        assertThatThrownBy(() -> stream.rows().forEach(row -> seen.add(row.get("q"))))
+                .isInstanceOf(QueryException.class);
+        assertThat(seen).containsExactly(-10);
+        assertThat(lazy.allConnectionsClosed()).isTrue();
+    }
+
+    @Test
     void csvSpecialCharactersRoundTrip() throws Exception {
         ds.exec("CREATE TABLE t (n INT, v VARCHAR(50))",
                 "INSERT INTO t VALUES (1, 'a,\"b\"'), (2, 'line1\nline2'), (3, NULL), (4, 'plain')");

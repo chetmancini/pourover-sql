@@ -95,6 +95,19 @@ class RowFormatterTest {
     }
 
     @Test
+    void csvRowQuotesNonStringValues() {
+        // e.g. a PGobject json value, an array or a Clob whose toString() needs quoting.
+        Object jsonLike = new Object() {
+            @Override
+            public String toString() {
+                return "{\"a\":1,\n\"b\":2}";
+            }
+        };
+        assertThat(RowFormatter.csvRow(Arrays.asList(jsonLike, 5)))
+                .isEqualTo("\"{\"\"a\"\":1,\n\"\"b\"\":2}\",5");
+    }
+
+    @Test
     void csvRowRendersTemporalValuesAsIso8601() {
         List<Object> values = List.of(java.sql.Timestamp.valueOf("2024-01-02 03:04:05"), LocalDate.of(2024, 1, 2));
         assertThat(RowFormatter.csvRow(values)).isEqualTo("2024-01-02T03:04:05,2024-01-02");

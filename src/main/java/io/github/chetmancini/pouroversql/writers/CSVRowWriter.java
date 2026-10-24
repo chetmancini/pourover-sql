@@ -75,14 +75,28 @@ public class CSVRowWriter extends FileRowWriter {
         this.orderedKeys = null;
     }
 
-    private void writeHeadersOnce(Map<String, Object> row) {
-        if (this.orderedKeys == null) {
-            this.orderedKeys = new ArrayList<>(row.keySet());
-        }
+    /**
+     * Fixes the column order and writes the header row (if enabled) before any data row.
+     * @param columns the column keys, in order
+     */
+    @Override
+    public void begin(List<String> columns) {
+        this.orderedKeys = new ArrayList<>(columns);
+        this.writeHeaderIfNeeded();
+    }
+
+    private void writeHeaderIfNeeded() {
         if (!this.headersWritten && this.shouldWriteHeaders) {
             this.writer.println(RowFormatter.csvHeader(this.orderedKeys, this.delimiter));
             this.headersWritten = true;
         }
+    }
+
+    private void writeHeadersOnce(Map<String, Object> row) {
+        if (this.orderedKeys == null) {
+            this.orderedKeys = new ArrayList<>(row.keySet());
+        }
+        this.writeHeaderIfNeeded();
     }
 
     /**

@@ -19,8 +19,12 @@ package io.github.chetmancini.pouroversql.util;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Plain-JDBC helpers for reading result sets.
@@ -42,12 +46,32 @@ public final class ResultSets {
         int columns = meta.getColumnCount();
         Map<String, Object> row = new LinkedHashMap<>(columns * 2);
         for (int i = 1; i <= columns; i++) {
-            String label = meta.getColumnLabel(i);
-            if (label == null || label.isEmpty()) {
-                label = meta.getColumnName(i);
-            }
-            row.put(label, rs.getObject(i));
+            row.put(label(meta, i), rs.getObject(i));
         }
         return row;
+    }
+
+    /**
+     * The distinct column labels of a result, in column order, using the same naming as
+     * {@link #toMap(ResultSet)} (a repeated label appears once, at its first position).
+     * @param rs a ResultSet
+     * @return the column labels
+     * @throws SQLException on JDBC errors
+     */
+    public static List<String> columnLabels(ResultSet rs) throws SQLException {
+        ResultSetMetaData meta = rs.getMetaData();
+        Set<String> labels = new LinkedHashSet<>();
+        for (int i = 1; i <= meta.getColumnCount(); i++) {
+            labels.add(label(meta, i));
+        }
+        return new ArrayList<>(labels);
+    }
+
+    private static String label(ResultSetMetaData meta, int column) throws SQLException {
+        String label = meta.getColumnLabel(column);
+        if (label == null || label.isEmpty()) {
+            label = meta.getColumnName(column);
+        }
+        return label;
     }
 }

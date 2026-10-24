@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
  *       rendered as ISO-8601 strings (for example {@code 2024-01-02T03:04:05}).</li>
  *   <li>JSON: SQL NULL is {@code null}; non-ASCII is written raw; HTML characters such as
  *       {@code <}, {@code =} and {@code &} are not escaped.</li>
- *   <li>CSV: a value containing the delimiter, a double quote, {@code \n} or {@code \r} is wrapped
+ *   <li>CSV: a value (of any type) whose text contains the delimiter, a double quote, {@code \n} or {@code \r} is wrapped
  *       in double quotes with embedded quotes doubled; SQL NULL is an empty field.</li>
  * </ul>
  */
@@ -116,9 +116,9 @@ public final class RowFormatter {
             return "";
         }
         String text = normalized.toString();
-        if (normalized instanceof String
-                && (text.contains(delimiter) || text.contains(QUOTE) || text.indexOf('\n') >= 0
-                || text.indexOf('\r') >= 0)) {
+        // Decide from the rendered text so json/jsonb objects, arrays, Clobs, etc. are quoted too.
+        if (text.contains(delimiter) || text.contains(QUOTE) || text.indexOf('\n') >= 0
+                || text.indexOf('\r') >= 0) {
             return QUOTE + text.replace(QUOTE, QUOTE + QUOTE) + QUOTE;
         }
         return text;

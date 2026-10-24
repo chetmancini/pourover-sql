@@ -24,6 +24,15 @@ import java.util.Map;
 public interface RowWriter extends AutoCloseable {
 
     /**
+     * Called once before any row with the output column keys, in order (key case already applied).
+     * The default does nothing; writers that emit a header (such as CSV) override it so an
+     * empty result still produces one.
+     * @param columns the column keys
+     */
+    default void begin(List<String> columns) {
+    }
+
+    /**
      * Write a row out.
      * @param row the row data to write out.
      */

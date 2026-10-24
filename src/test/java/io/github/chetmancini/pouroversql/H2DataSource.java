@@ -41,13 +41,20 @@ final class H2DataSource implements DataSource {
     private final List<Connection> handedOut = new CopyOnWriteArrayList<>();
 
     H2DataSource() {
+        this("");
+    }
+
+    /**
+     * @param urlOptions extra H2 URL settings, each starting with ';' (e.g. ";LAZY_QUERY_EXECUTION=1")
+     */
+    H2DataSource(String urlOptions) {
         try {
             // Explicit load: DriverManager service discovery is not reliable here.
             Class.forName("org.h2.Driver");
         } catch (ClassNotFoundException e) {
             throw new IllegalStateException(e);
         }
-        this.url = "jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1";
+        this.url = "jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1" + urlOptions;
     }
 
     /** Runs setup statements on a connection that is not tracked. */
