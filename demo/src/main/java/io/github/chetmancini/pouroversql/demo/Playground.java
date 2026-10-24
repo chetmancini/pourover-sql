@@ -37,17 +37,28 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 
 /**
@@ -62,6 +73,7 @@ import java.util.regex.Pattern;
 public final class Playground {
 
     static final int MAX_ROWS = 1_000;
+    static final int MAX_RESULT_CHARS = 4 * 1024 * 1024;
     static final int MAX_BODY_BYTES = 64 * 1024;
     private static final int QUERY_TIMEOUT_SECONDS = 5;
     private static final Gson GSON = new Gson();
@@ -83,12 +95,21 @@ public final class Playground {
 
     /** Starts the playground on the loopback interface. Use port 0 for an ephemeral port. */
     public static Running start(int port) {
+        return start(port, Limits.DEFAULT);
+    }
+
+    /** Query limits: the JDBC timeout the driver enforces, and the server-side wall-clock deadline. */
+    record Limits(int jdbcTimeoutSeconds, long deadlineMillis) {
+        static final Limits DEFAULT = new Limits(QUERY_TIMEOUT_SECONDS, QUERY_TIMEOUT_SECONDS * 1000L + 2000L);
+    }
+
+    static Running start(int port, Limits limits) {
         try {
             Database database = Database.seed();
             HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 0);
             ExecutorService executor = Executors.newFixedThreadPool(4);
             server.setExecutor(executor);
-            Running running = new Running(server, executor, database);
+            Running running = new Running(server, executor, database, limits);
             server.createContext("/", running::handle);
             server.start();
             return running;
@@ -103,13 +124,29 @@ public final class Playground {
         private final ExecutorService executor;
         private final Database database;
         private final Pourover pourover;
-        private final QueryOptions options = QueryOptions.of(500, MAX_ROWS + 1, QUERY_TIMEOUT_SECONDS);
+        private final ExecutorService queryExecutor;
+        private final Limits limits;
+        private final QueryOptions options;
+        private final ThreadLocal<QueryRun> currentRun = new ThreadLocal<>();
+        private volatile RuntimeException failure;
 
-        private Running(HttpServer server, ExecutorService executor, Database database) {
+        private Running(HttpServer server, ExecutorService executor, Database database, Limits limits) {
             this.server = server;
             this.executor = executor;
             this.database = database;
-            this.pourover = Pourover.of(database.reader());
+            this.limits = limits;
+            this.options = QueryOptions.of(500, MAX_ROWS + 1, limits.jdbcTimeoutSeconds());
+            this.queryExecutor = Executors.newFixedThreadPool(4, runnable -> {
+                Thread thread = new Thread(runnable, "playground-query");
+                thread.setDaemon(true);
+                return thread;
+            });
+            this.pourover = Pourover.of(trackQueries(database.reader(), currentRun));
+        }
+
+        /** Makes the next query fail with this exception, so tests can reach the unexpected-error path. */
+        void failNextQueryForTest(RuntimeException failure) {
+            this.failure = failure;
         }
 
         public int port() {
@@ -129,35 +166,50 @@ public final class Playground {
         public void close() {
             server.stop(0);
             executor.shutdownNow();
+            queryExecutor.shutdownNow();
             database.shutdown();
         }
 
         private void handle(HttpExchange exchange) throws IOException {
             try (exchange) {
-                if (!hostAllowed(exchange)) {
-                    sendText(exchange, 403, "text/plain; charset=utf-8", "Forbidden: unexpected Host header");
-                    return;
-                }
-                if (!originAllowed(exchange)) {
-                    sendText(exchange, 403, "text/plain; charset=utf-8", "Forbidden: cross-origin request");
-                    return;
-                }
-                String path = exchange.getRequestURI().getPath();
-                String method = exchange.getRequestMethod();
-                if (path.equals("/health") && method.equals("GET")) {
-                    sendText(exchange, 200, "text/plain; charset=utf-8", "ok");
-                } else if (path.equals("/") && method.equals("GET")) {
-                    sendText(exchange, 200, "text/html; charset=utf-8", page());
-                } else if (path.equals("/query")) {
-                    if (!method.equals("POST")) {
-                        exchange.getResponseHeaders().set("Allow", "POST");
-                        sendError(exchange, 405, "Use POST for /query.");
-                    } else {
-                        query(exchange);
+                try {
+                    dispatch(exchange);
+                } catch (RuntimeException e) {
+                    // Unexpected: log it here, tell the caller nothing about it.
+                    System.getLogger(Playground.class.getName()).log(System.Logger.Level.ERROR, "Unexpected error", e);
+                    try {
+                        sendError(exchange, 500, "internal error");
+                    } catch (IOException | RuntimeException ignored) {
+                        // Response already started or connection gone.
                     }
-                } else {
-                    sendText(exchange, 404, "text/plain; charset=utf-8", "Not found");
                 }
+            }
+        }
+
+        private void dispatch(HttpExchange exchange) throws IOException {
+            if (!hostAllowed(exchange)) {
+                sendText(exchange, 403, "text/plain; charset=utf-8", "Forbidden: unexpected Host header");
+                return;
+            }
+            if (!originAllowed(exchange)) {
+                sendText(exchange, 403, "text/plain; charset=utf-8", "Forbidden: cross-origin request");
+                return;
+            }
+            String path = exchange.getRequestURI().getPath();
+            String method = exchange.getRequestMethod();
+            if (path.equals("/health") && method.equals("GET")) {
+                sendText(exchange, 200, "text/plain; charset=utf-8", "ok");
+            } else if (path.equals("/") && method.equals("GET")) {
+                sendText(exchange, 200, "text/html; charset=utf-8", page());
+            } else if (path.equals("/query")) {
+                if (!method.equals("POST")) {
+                    exchange.getResponseHeaders().set("Allow", "POST");
+                    sendError(exchange, 405, "Use POST for /query.");
+                } else {
+                    query(exchange);
+                }
+            } else {
+                sendText(exchange, 404, "text/plain; charset=utf-8", "Not found");
             }
         }
 
@@ -204,43 +256,70 @@ public final class Playground {
                 sendError(exchange, 400, rejection);
                 return;
             }
+            QueryRun queryRun = new QueryRun();
+            Future<Map<String, Object>> future = queryExecutor.submit(() -> collect(sql.strip(), keyCase, queryRun));
             try {
-                sendJson(exchange, 200, run(sql.strip(), keyCase));
-            } catch (QueryException e) {
-                sendError(exchange, 400, driverMessage(e));
-            } catch (IllegalStateException e) {
-                sendError(exchange, 400, e.getMessage());
+                sendJson(exchange, 200, future.get(limits.deadlineMillis(), TimeUnit.MILLISECONDS));
+            } catch (TimeoutException e) {
+                // The wall-clock limit holds even if the session disabled its own JDBC timeout.
+                queryRun.cancel();
+                future.cancel(true);
+                sendError(exchange, 503, "The query hit the time limit of " + Math.max(1, limits.deadlineMillis() / 1000)
+                        + " seconds and was cancelled. Try a smaller query.");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                queryRun.cancel();
+                future.cancel(true);
+                sendError(exchange, 503, "The query was interrupted.");
+            } catch (ExecutionException e) {
+                Throwable cause = e.getCause();
+                if (cause instanceof QueryException q) {
+                    sendError(exchange, 400, driverMessage(q));
+                } else if (cause instanceof IllegalStateException ise && ise.getMessage() != null) {
+                    sendError(exchange, 400, ise.getMessage());
+                } else if (cause instanceof RuntimeException re) {
+                    throw re;
+                } else if (cause instanceof Error err) {
+                    throw err;
+                } else {
+                    throw new IllegalStateException(cause);
+                }
             }
         }
 
-        private Map<String, Object> run(String sql, KeyCase keyCase) {
+        /** Runs on a query thread: collects at most MAX_ROWS rows and MAX_RESULT_CHARS of output. */
+        private Map<String, Object> collect(String sql, KeyCase keyCase, QueryRun queryRun) {
+            RuntimeException injected = failure;
+            if (injected != null) {
+                failure = null;
+                throw injected;
+            }
             FormatOptions format = new FormatOptions(keyCase);
-            List<Map<String, Object>> rows = pourover.list(sql, options);
-            boolean truncated = rows.size() > MAX_ROWS;
-            if (truncated) {
-                rows = rows.subList(0, MAX_ROWS);
+            ResultBuffer buffer = new ResultBuffer(format);
+            currentRun.set(queryRun);
+            try {
+                pourover.forEach(sql, buffer, options);
+            } catch (ResultBuffer.Full full) {
+                // Deliberate early stop: the rest of the result is never read.
+            } finally {
+                currentRun.remove();
             }
-            StringBuilder jsonl = new StringBuilder();
-            StringBuilder csv = new StringBuilder();
-            for (Map<String, Object> row : rows) {
-                jsonl.append(RowFormatter.jsonl(row, format)).append('\n');
-                Map<String, Object> keyed = format.formatKeys(row);
-                if (csv.length() == 0) {
-                    csv.append(RowFormatter.csvHeader(new ArrayList<>(keyed.keySet()))).append('\n');
-                }
-                csv.append(RowFormatter.csvRow(new ArrayList<>(keyed.values()))).append('\n');
-            }
+            List<String> columns = queryRun.labels();
+            Map<String, Object> labelMap = new LinkedHashMap<>();
+            columns.forEach(label -> labelMap.put(label, null));
+            String header = RowFormatter.csvHeader(new ArrayList<>(format.formatKeys(labelMap).keySet()));
             return Map.of(
-                    "jsonl", jsonl.toString(),
-                    "csv", csv.toString(),
+                    "jsonl", buffer.jsonl.toString(),
+                    "csv", columns.isEmpty() ? "" : header + "\n" + buffer.csv,
                     "javaSnippet", JavaSnippet.render(sql, keyCase),
-                    "rowCount", rows.size(),
-                    "truncated", truncated);
+                    "rowCount", buffer.rows,
+                    "truncated", buffer.truncated);
         }
 
         private static String driverMessage(QueryException e) {
             Throwable cause = e.getCause() == null ? e : e.getCause();
-            String message = cause.getMessage() == null ? e.getMessage() : cause.getMessage();
+            String message = cause.getMessage() != null ? cause.getMessage()
+                    : e.getMessage() != null ? e.getMessage() : "The query failed.";
             // Keep the first lines of the driver message; never a stack trace.
             return message.length() > 600 ? message.substring(0, 600) + "..." : message;
         }
@@ -277,6 +356,104 @@ public final class Playground {
         }
     }
 
+    /** Collects rendered rows until the row cap or the character budget is reached. */
+    private static final class ResultBuffer implements java.util.function.Consumer<Map<String, Object>> {
+        /** Thrown to stop reading once the result is full. */
+        static final class Full extends RuntimeException {
+            Full() {
+                super(null, null, false, false);
+            }
+        }
+
+        private final FormatOptions format;
+        final StringBuilder jsonl = new StringBuilder();
+        final StringBuilder csv = new StringBuilder();
+        int rows;
+        boolean truncated;
+
+        ResultBuffer(FormatOptions format) {
+            this.format = format;
+        }
+
+        @Override
+        public void accept(Map<String, Object> row) {
+            // Check the raw size first so one huge value is never rendered into more strings.
+            long estimate = 0;
+            for (Object value : row.values()) {
+                estimate += value instanceof CharSequence text ? text.length() : 24;
+            }
+            if (rows >= MAX_ROWS || (long) jsonl.length() + csv.length() + 2 * estimate > MAX_RESULT_CHARS) {
+                truncated = true;
+                throw new Full();
+            }
+            jsonl.append(RowFormatter.jsonl(row, format)).append('\n');
+            csv.append(RowFormatter.csvRow(new ArrayList<>(format.formatKeys(row).values()))).append('\n');
+            rows++;
+        }
+    }
+
+    /** What one query has handed out, so the server can cancel it and read its column labels. */
+    private static final class QueryRun {
+        private volatile Statement statement;
+        private volatile List<String> labels = List.of();
+
+        List<String> labels() {
+            return labels;
+        }
+
+        void cancel() {
+            Statement current = statement;
+            if (current != null) {
+                try {
+                    current.cancel();
+                } catch (SQLException e) {
+                    // Already finished or closed.
+                }
+            }
+        }
+    }
+
+    /** Wraps the data source so each query's statement can be cancelled and its columns read. */
+    private static DataSource trackQueries(DataSource raw, ThreadLocal<QueryRun> current) {
+        return (DataSource) Proxy.newProxyInstance(Playground.class.getClassLoader(),
+                new Class<?>[]{DataSource.class}, (proxy, method, args) -> {
+                    Object result = call(raw, method, args);
+                    QueryRun run = current.get();
+                    if (run != null && method.getName().equals("getConnection") && result instanceof Connection c) {
+                        return Proxy.newProxyInstance(Playground.class.getClassLoader(),
+                                new Class<?>[]{Connection.class}, (p, m, a) -> {
+                                    Object r = call(c, m, a);
+                                    if (m.getName().equals("prepareStatement") && r instanceof PreparedStatement ps) {
+                                        run.statement = ps;
+                                        return Proxy.newProxyInstance(Playground.class.getClassLoader(),
+                                                new Class<?>[]{PreparedStatement.class}, (q, sm, sa) -> {
+                                                    Object sr = call(ps, sm, sa);
+                                                    if (sm.getName().equals("executeQuery") && sr instanceof ResultSet rs) {
+                                                        ResultSetMetaData md = rs.getMetaData();
+                                                        List<String> labels = new ArrayList<>();
+                                                        for (int i = 1; i <= md.getColumnCount(); i++) {
+                                                            labels.add(md.getColumnLabel(i));
+                                                        }
+                                                        run.labels = labels;
+                                                    }
+                                                    return sr;
+                                                });
+                                    }
+                                    return r;
+                                });
+                    }
+                    return result;
+                });
+    }
+
+    private static Object call(Object target, Method method, Object[] args) throws Throwable {
+        try {
+            return method.invoke(target, args);
+        } catch (InvocationTargetException e) {
+            throw e.getCause();
+        }
+    }
+
     /** Accepts one SELECT/WITH statement and rejects file and code capable H2 features. */
     static final class SqlGuard {
         private SqlGuard() {
@@ -287,7 +464,12 @@ public final class Playground {
             if (sql == null) {
                 return "Enter a SELECT statement.";
             }
-            String clean = blankCommentsAndLiterals(sql).strip();
+            String clean;
+            try {
+                clean = blankCommentsAndLiterals(sql).strip();
+            } catch (UnsupportedSyntaxException e) {
+                return "Unsupported syntax: " + e.getMessage() + ".";
+            }
             while (clean.endsWith(";")) {
                 clean = clean.substring(0, clean.length() - 1).stripTrailing();
             }
@@ -313,57 +495,77 @@ public final class Playground {
                     || !(Character.isLetterOrDigit(upper.charAt(word.length())) || upper.charAt(word.length()) == '_'));
         }
 
-        /** Replaces comments with a space and the inside of '...' literals with nothing; keeps "..." identifiers. */
+        /** Thrown for text this scanner cannot classify with the same result as H2's own lexer. */
+        static final class UnsupportedSyntaxException extends RuntimeException {
+            UnsupportedSyntaxException(String message) {
+                super(message);
+            }
+        }
+
+        /**
+         * Replaces comments with a space and the inside of '...' literals with nothing; keeps "..."
+         * identifiers. H2 also lexes dollar-quoted strings, // comments and other forms this scanner
+         * does not model, so any of those (and any unterminated quote or comment) is rejected rather
+         * than guessed at: a scanner that disagrees with H2 about where a literal ends can be used to
+         * hide a second statement or a forbidden function.
+         */
         static String blankCommentsAndLiterals(String sql) {
             StringBuilder out = new StringBuilder(sql.length());
             int i = 0;
             int n = sql.length();
             while (i < n) {
                 char c = sql.charAt(i);
-                if (c == '-' && i + 1 < n && sql.charAt(i + 1) == '-') {
-                    while (i < n && sql.charAt(i) != '\n') {
+                char next = i + 1 < n ? sql.charAt(i + 1) : '\0';
+                if (c == '-' && next == '-') {
+                    // H2 ends a line comment at \n or \r.
+                    while (i < n && sql.charAt(i) != '\n' && sql.charAt(i) != '\r') {
                         i++;
                     }
                     out.append(' ');
-                } else if (c == '/' && i + 1 < n && sql.charAt(i + 1) == '*') {
+                } else if (c == '/' && next == '*') {
                     int end = sql.indexOf("*/", i + 2);
-                    i = end < 0 ? n : end + 2;
+                    if (end < 0) {
+                        throw new UnsupportedSyntaxException("unterminated /* comment");
+                    }
+                    i = end + 2;
                     out.append(' ');
+                } else if (c == '/' && next == '/') {
+                    throw new UnsupportedSyntaxException("// comments are not supported");
+                } else if (c == '$' && next == '$') {
+                    throw new UnsupportedSyntaxException("$$ quoting is not supported");
+                } else if (c == '`' || c == '\\' || c == '\0') {
+                    throw new UnsupportedSyntaxException("the character " + (c == '\0' ? "NUL" : String.valueOf(c))
+                            + " is not supported");
                 } else if (c == '\'') {
                     out.append("''");
-                    i++;
-                    while (i < n) {
-                        if (sql.charAt(i) == '\'') {
-                            if (i + 1 < n && sql.charAt(i + 1) == '\'') {
-                                i += 2;
-                                continue;
-                            }
-                            break;
-                        }
-                        i++;
-                    }
-                    i++;
+                    i = endOfQuoted(sql, i, '\'') + 1;
                 } else if (c == '"') {
-                    int start = i;
-                    i++;
-                    while (i < n) {
-                        if (sql.charAt(i) == '"') {
-                            if (i + 1 < n && sql.charAt(i + 1) == '"') {
-                                i += 2;
-                                continue;
-                            }
-                            break;
-                        }
-                        i++;
-                    }
-                    i = Math.min(i + 1, n);
-                    out.append(sql, start, i);
+                    int end = endOfQuoted(sql, i, '"');
+                    out.append(sql, i, end + 1);
+                    i = end + 1;
                 } else {
                     out.append(c);
                     i++;
                 }
             }
             return out.toString();
+        }
+
+        /** Index of the closing quote of the literal opening at {@code start}; doubled quotes are escapes. */
+        private static int endOfQuoted(String sql, int start, char quote) {
+            int n = sql.length();
+            int i = start + 1;
+            while (i < n) {
+                if (sql.charAt(i) == quote) {
+                    if (i + 1 < n && sql.charAt(i + 1) == quote) {
+                        i += 2;
+                        continue;
+                    }
+                    return i;
+                }
+                i++;
+            }
+            throw new UnsupportedSyntaxException("unterminated " + quote + " quote");
         }
     }
 
@@ -372,12 +574,35 @@ public final class Playground {
         private JavaSnippet() {
         }
 
+        /** Escapes backslashes and the third quote of every run of quotes, so no run can close the block. */
+        static String escapeTextBlock(String text) {
+            StringBuilder out = new StringBuilder(text.length() + 8);
+            int run = 0;
+            for (char c : text.toCharArray()) {
+                if (c == '\\') {
+                    out.append("\\\\");
+                    run = 0;
+                } else if (c == '"') {
+                    if (++run == 3) {
+                        out.append("\\\"");
+                        run = 0;
+                    } else {
+                        out.append(c);
+                    }
+                } else {
+                    out.append(c);
+                    run = 0;
+                }
+            }
+            return out.toString();
+        }
+
         static String render(String sql, KeyCase keyCase) {
             String body = sql.strip();
             while (body.endsWith(";")) {
                 body = body.substring(0, body.length() - 1).stripTrailing();
             }
-            String escaped = body.replace("\\", "\\\\").replace("\"\"\"", "\\\"\"\"").replace("\r", "");
+            String escaped = escapeTextBlock(body.replace("\r", ""));
             if (escaped.endsWith("\"")) {
                 escaped = escaped.substring(0, escaped.length() - 1) + "\\\"";
             }

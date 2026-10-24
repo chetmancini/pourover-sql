@@ -119,6 +119,9 @@
     background: var(--error-bg); color: var(--error-ink); border-radius: 6px;
     padding: 10px 12px; margin: 0 0 12px; font: 0.88rem/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere;
   }
+  pre:empty::before { content: "No rows returned."; color: var(--muted); font-family: var(--sans); }
+  pre#out-csv:empty::before { content: "No columns."; }
+  pre#out-java:empty::before { content: "Run a query to see the Java call."; }
   [hidden] { display: none !important; }
   footer { margin-top: 24px; color: var(--muted); font-size: 0.82rem; max-width: 70ch; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -237,7 +240,7 @@
       outputs.csv.textContent = r.body.csv;
       outputs.java.textContent = r.body.javaSnippet;
       var n = r.body.rowCount;
-      status.textContent = n + (n === 1 ? " row" : " rows") + (r.body.truncated ? " (truncated at 1,000)" : "");
+      status.textContent = n + (n === 1 ? " row" : " rows") + (r.body.truncated ? " (truncated: at most 1,000 rows or about 4 MB of output are shown)" : "");
     }).catch(function () {
       if (ticket !== inFlight) return;
       showError("Could not reach the playground server. Is it still running?");

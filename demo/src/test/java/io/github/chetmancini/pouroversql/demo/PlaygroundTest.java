@@ -192,6 +192,7 @@ class PlaygroundTest {
         assertThat(response.statusCode()).isEqualTo(400);
         assertThat(json(response).get("error").getAsString()).containsIgnoringCase("one statement");
         assertThat(post("SELECT 1; -- done").statusCode()).isEqualTo(200);
+        assertThat(post("SELECT 1; SELECT 2").statusCode()).isEqualTo(400);
     }
 
     @Test
@@ -249,5 +250,157 @@ class PlaygroundTest {
                 .findFirst().orElse(null);
         assumeTrue(external != null, "no non-loopback IPv4 address on this machine");
         assertThatThrownBy(() -> new Socket(external, playground.port()).close()).isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void dollarQuoteDesyncCannotHideSecondStatement() throws Exception {
+        for (String sql : List.of("SELECT $$'$$; DROP TABLE SHOP.T -- '", "SELECT $$ ; SELECT 2")) {
+            HttpResponse<String> response = post(sql);
+            assertThat(response.statusCode()).as(sql).isEqualTo(400);
+            assertThat(json(response).get("error").getAsString()).as(sql).containsIgnoringCase("unsupported syntax");
+        }
+    }
+
+    @Test
+    void dollarQuoteDesyncCannotHideFileRead() throws Exception {
+        HttpResponse<String> response = post("SELECT $$'$$, FILE_READ('/etc/hosts') -- '");
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(json(response).get("error").getAsString()).containsIgnoringCase("unsupported syntax");
+    }
+
+    @Test
+    void slashSlashCommentDesyncIsRejected() throws Exception {
+        HttpResponse<String> response = post("SELECT 1 // '\n; CREATE TABLE PWN(A INT) -- '");
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(json(response).get("error").getAsString()).containsIgnoringCase("unsupported syntax");
+    }
+
+    @Test
+    void carriageReturnEndsALineCommentSoItCannotHideASecondStatement() throws Exception {
+        HttpResponse<String> response = post("SELECT 1 --x\r; DROP TABLE orders");
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(json(response).get("error").getAsString()).containsIgnoringCase("one statement");
+    }
+
+    @Test
+    void unterminatedQuotesAndCommentsAreRejected() throws Exception {
+        for (String sql : List.of("SELECT 'abc", "SELECT \"abc", "SELECT 1 /* never closed")) {
+            HttpResponse<String> response = post(sql);
+            assertThat(response.statusCode()).as(sql).isEqualTo(400);
+            assertThat(json(response).get("error").getAsString()).as(sql).containsIgnoringCase("unsupported syntax");
+        }
+    }
+
+    @Test
+    void setStatementsAreRejected() throws Exception {
+        assertThat(post("SET QUERY_TIMEOUT 0").statusCode()).isEqualTo(400);
+        assertThat(post("SELECT 1; SET QUERY_TIMEOUT 0").statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void normalQueriesWithQuotedDollarsAndSlashesStillWork() throws Exception {
+        HttpResponse<String> response = post(
+                "SELECT '$$' AS A, 'a//b' AS B, 'it''s' AS C /* $$ and // are fine in comments */\n-- // and $$ too\n");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(json(response).get("jsonl").getAsString()).contains("\"A\":\"$$\"").contains("a//b");
+    }
+
+    @Test
+    void queryTimeoutCannotBeDisabledBySet() throws Exception {
+        // The JDBC timeout is set far out of reach, as if a session SET had disabled it: only the
+        // server-side wall-clock deadline can stop this query.
+        try (Playground.Running slow = Playground.start(0, new Playground.Limits(600, 1_000))) {
+            long started = System.nanoTime();
+            HttpResponse<String> response = client.send(HttpRequest.newBuilder(
+                            URI.create("http://127.0.0.1:" + slow.port() + "/query"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(Map.of("sql",
+                            "SELECT SUM(X * X) FROM SYSTEM_RANGE(1, 4000000000)", "keyCase", "default"))))
+                    .build(), HttpResponse.BodyHandlers.ofString());
+            long seconds = (System.nanoTime() - started) / 1_000_000_000L;
+            assertThat(response.statusCode()).isEqualTo(503);
+            assertThat(json(response).get("error").getAsString()).containsIgnoringCase("time");
+            assertThat(seconds).isLessThan(8);
+            HttpResponse<String> health = client.send(HttpRequest.newBuilder(
+                    URI.create("http://127.0.0.1:" + slow.port() + "/health")).build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(health.statusCode()).isEqualTo(200);
+        }
+    }
+
+    @Test
+    void hugeResultIsTruncatedByBytes() throws Exception {
+        HttpResponse<String> response = post("SELECT REPEAT('x', 100000000) FROM SYSTEM_RANGE(1, 1000)");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(json(response).get("truncated").getAsBoolean()).isTrue();
+        assertThat(response.body().length()).isLessThan(Playground.MAX_RESULT_CHARS * 2 + 4096);
+
+        HttpResponse<String> many = post("SELECT REPEAT('x', 20000) AS V FROM SYSTEM_RANGE(1, 1000)");
+        JsonObject body = json(many);
+        assertThat(body.get("truncated").getAsBoolean()).isTrue();
+        assertThat(body.get("rowCount").getAsInt()).isBetween(1, 999);
+        assertThat(many.body().length()).isLessThan(Playground.MAX_RESULT_CHARS * 2 + 4096);
+        assertThat(post("SELECT 1 AS One").statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void exactly1000RowsIsNotTruncated() throws Exception {
+        JsonObject body = json(post("SELECT X FROM SYSTEM_RANGE(1, 1000)"));
+        assertThat(body.get("rowCount").getAsInt()).isEqualTo(1000);
+        assertThat(body.get("truncated").getAsBoolean()).isFalse();
+    }
+
+    @Test
+    void row1001IsTruncated() throws Exception {
+        JsonObject body = json(post("SELECT X FROM SYSTEM_RANGE(1, 1001)"));
+        assertThat(body.get("rowCount").getAsInt()).isEqualTo(1000);
+        assertThat(body.get("truncated").getAsBoolean()).isTrue();
+    }
+
+    @Test
+    void javaSnippetEscapesQuoteRuns() throws Exception {
+        for (String quotes : List.of("\"\"\"", "\"\"\"\"", "\"\"\"\"\"\"\"")) {
+            JsonObject body = json(post("SELECT '" + quotes + "' AS A"));
+            String snippet = body.get("javaSnippet").getAsString();
+            assertThat(unescapedDelimiters(snippet)).as(quotes).isEqualTo(2); // only the opening and closing
+            assertThat(snippet).contains("\\\"");
+        }
+    }
+
+    /** Counts runs of three unescaped quotes the way the Java lexer would see them in a text block. */
+    private static int unescapedDelimiters(String source) {
+        int delimiters = 0;
+        int run = 0;
+        for (int i = 0; i < source.length(); i++) {
+            char c = source.charAt(i);
+            if (c == '\\') {
+                i++;
+                run = 0;
+            } else if (c == '"') {
+                if (++run == 3) {
+                    delimiters++;
+                    run = 0;
+                }
+            } else {
+                run = 0;
+            }
+        }
+        return delimiters;
+    }
+
+    @Test
+    void emptyResultCsvHasHeader() throws Exception {
+        JsonObject body = json(post("SELECT \"OrderId\", \"CustomerName\" FROM orders WHERE 1 = 0", "snake",
+                "application/json", null));
+        assertThat(body.get("rowCount").getAsInt()).isZero();
+        assertThat(body.get("jsonl").getAsString()).isEmpty();
+        assertThat(body.get("csv").getAsString()).isEqualTo("order_id,customer_name\n");
+    }
+
+    @Test
+    void unexpectedExceptionReturnsGeneric500() throws Exception {
+        playground.failNextQueryForTest(new IllegalArgumentException("secret detail at com.example.Internal"));
+        HttpResponse<String> response = post("SELECT 1");
+        assertThat(response.statusCode()).isEqualTo(500);
+        assertThat(response.body()).isEqualTo("{\"error\":\"internal error\"}");
     }
 }
