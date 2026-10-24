@@ -19,3 +19,5 @@ plugins {
 }
 
 rootProject.name = "pourover-sql"
+
+include(":demo", ":examples")
