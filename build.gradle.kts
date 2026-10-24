@@ -37,7 +37,7 @@ repositories {
 }
 
 // slf4j-simple is a runtime binding for the CLI only; it must never reach the library POM.
-val cli: Configuration by configurations.creating
+val cli: Configuration = configurations.create("cli")
 
 dependencies {
     cli(libs.slf4j.simple)
@@ -56,6 +56,27 @@ dependencies {
     testImplementation(libs.assertj.core)
     testRuntimeOnly(libs.junit.platform.launcher)
     testRuntimeOnly(libs.h2)
+}
+
+// End-to-end tests against real databases in Testcontainers. Needs Docker, so it is a separate
+// source set and task that `test`, `check` and `build` do not depend on: run `./gradlew e2eTest`.
+val e2eTest: SourceSet = sourceSets.create("e2eTest").apply {
+    compileClasspath += sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().output
+}
+
+configurations[e2eTest.implementationConfigurationName].extendsFrom(configurations.implementation.get())
+configurations[e2eTest.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly.get())
+
+dependencies {
+    "e2eTestImplementation"(platform(libs.junit.bom))
+    "e2eTestImplementation"(platform(libs.testcontainers.bom))
+    "e2eTestImplementation"(libs.junit.jupiter)
+    "e2eTestImplementation"(libs.assertj.core)
+    "e2eTestImplementation"(libs.testcontainers.junit.jupiter)
+    "e2eTestImplementation"(libs.testcontainers.postgresql)
+    "e2eTestImplementation"(libs.testcontainers.mysql)
+    "e2eTestRuntimeOnly"(libs.junit.platform.launcher)
 }
 
 application {
@@ -93,6 +114,19 @@ distributions {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+tasks.register<Test>("e2eTest") {
+    group = "verification"
+    description = "Runs Postgres and MySQL end-to-end tests in Testcontainers (requires Docker; skipped without it)."
+    testClassesDirs = e2eTest.output.classesDirs
+    classpath = e2eTest.runtimeClasspath
+    useJUnitPlatform()
+    shouldRunAfter(tasks.test)
+    testLogging {
+        events("passed", "skipped", "failed")
+        showStandardStreams = false
+    }
 }
 
 tasks.register("fatJar") {

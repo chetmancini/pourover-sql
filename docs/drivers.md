@@ -2,8 +2,8 @@
 
 | Engine | Driver artifact / class | Bundled? | How to supply | E2E tested |
 |--------|-------------------------|----------|---------------|------------|
-| PostgreSQL | `org.postgresql:postgresql:42.7.14`, class `org.postgresql.Driver` | Bundled | Nothing to do | Planned (Task 7) |
-| MySQL | `com.mysql:mysql-connector-j:26.10.0`, class `com.mysql.cj.jdbc.Driver` | Bundled | Nothing to do | Planned (Task 7) |
+| PostgreSQL | `org.postgresql:postgresql:42.7.14`, class `org.postgresql.Driver` | Bundled | Nothing to do | Yes (`postgres:16-alpine`) |
+| MySQL | `com.mysql:mysql-connector-j:26.10.0`, class `com.mysql.cj.jdbc.Driver` | Bundled | Nothing to do | Yes (`mysql:8.4`) |
 | SQL Server | `com.microsoft.sqlserver:mssql-jdbc:13.6.1.jre11`, class `com.microsoft.sqlserver.jdbc.Driver` | Bundled | Nothing to do | Not e2e tested |
 | Snowflake | `net.snowflake:snowflake-jdbc:4.4.0`, class `net.snowflake.client.jdbc.SnowflakeDriver` | Bundled | Nothing to do | Not e2e tested |
 | Redshift | `com.amazon.redshift:redshift-jdbc42:2.3.0` (Maven Central), class `com.amazon.redshift.Driver` | Bundled | Nothing to do | Not e2e tested |
@@ -24,6 +24,7 @@ so no vendor class is needed at compile time.
 
 ## Notes
 
+- PostgreSQL and MySQL are tested end to end against real databases in Testcontainers (`./gradlew e2eTest`, needs Docker; skipped when Docker is unavailable, and not part of `build`). The other engines are not e2e tested.
 - Redshift and Informix resolve from Maven Central at current versions, so they are bundled.
 - All bundled drivers appear with `runtime` scope in the published POM. The only compile-scope dependency is `slf4j-api`.
 - `slf4j-simple` is a CLI-only runtime binding (included in the fat jar and `./gradlew run`), never in the library POM.
