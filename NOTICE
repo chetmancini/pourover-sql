@@ -10,3 +10,6 @@ Version 2.0.
 
 Existing source files retain their original Simon Data, Inc. copyright and
 license notices.
+
+Files originally released by Simon Data, Inc. have been modified by Chet
+Mancini since that release; the git history records the changes.

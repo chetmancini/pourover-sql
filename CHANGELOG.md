@@ -17,7 +17,7 @@
 
 - The Java API is rebuilt around records and `Pourover`; see the migration table below.
 - The package moved from `com.simondata.pouroversql` to `io.github.chetmancini.pouroversql`.
-- Gradle Kotlin DSL, Java 21, JUnit 5 and AssertJ.
+- Gradle Kotlin DSL, Java 21, JUnit 6 (Jupiter API) and AssertJ.
 - Behavior changes you may notice (details below): rows are plain `LinkedHashMap`s, JSON output is not HTML-escaped, dates and times are ISO-8601, key-case collisions throw, errors are thrown instead of logged, queries run with autocommit off and are rolled back unless the caller's connection is already in a transaction, CLI exit codes, the CLI no longer forces logging to TRACE, and the Athena driver is user-supplied.
 
 ### Removed
