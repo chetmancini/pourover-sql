@@ -126,7 +126,10 @@ public final class ResultSets {
         int length = java.lang.reflect.Array.getLength(array);
         List<Object> list = new ArrayList<>(length);
         for (int i = 0; i < length; i++) {
-            list.add(materialize(java.lang.reflect.Array.get(array, i)));
+            Object element = java.lang.reflect.Array.get(array, i);
+            // Multi-dimensional arrays (pgjdbc returns Integer[][]) nest; byte[] stays a Base64 leaf.
+            boolean nested = element != null && element.getClass().isArray() && !(element instanceof byte[]);
+            list.add(nested ? toList(element) : materialize(element));
         }
         return list;
     }

@@ -102,6 +102,13 @@ class PostgresE2ETest {
     }
 
     @Test
+    void multiDimensionalArraysAreNestedLists() {
+        var row = pourover().list("SELECT '{{1,2},{3,4}}'::int4[] AS m, '{a,b}'::text[] AS t").get(0);
+        assertThat(row).containsEntry("m", List.of(List.of(1, 2), List.of(3, 4)))
+                .containsEntry("t", List.of("a", "b"));
+    }
+
+    @Test
     void streamsLargeResultWithSmallFetchSize() throws Exception {
         QueryOptions options = QueryOptions.of(100, null, null);
         AtomicLong count = new AtomicLong();

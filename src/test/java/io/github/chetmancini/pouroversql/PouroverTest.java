@@ -471,6 +471,13 @@ class PouroverTest {
     }
 
     @Test
+    void multiDimensionalArraysBecomeNestedLists() throws Exception {
+        String sql = "SELECT ARRAY[ARRAY[1, 2], ARRAY[3, 4]] AS \"m\"";
+        assertThat(pourover.list(sql).get(0).get("m")).isEqualTo(List.of(List.of(1, 2), List.of(3, 4)));
+        assertThat(writeToString(sql, OutputFormat.JSONL)).isEqualTo("{\"m\":[[1,2],[3,4]]}" + NL);
+    }
+
+    @Test
     void jsonlRendersArraysClobsBlobs() throws Exception {
         assertThat(writeToString(LOB_SQL, OutputFormat.JSONL)).isEqualTo("{\"a\":[1,2],\"c\":\"x\",\"b\":\"AQ==\"}" + NL);
     }
