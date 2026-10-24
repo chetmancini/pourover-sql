@@ -129,17 +129,19 @@ java -jar pourover-sql-<version>-all.jar [options]
 | `-t`, `--type` | `SQLSERVER` | Engine, from the table above. |
 | `-s`, `--sql` | stdin | Path of the file holding the SQL. Reads standard input when absent. |
 | `-f`, `--file` | `query_result.json` | Output file. |
-| `--format` | `json` | `json` (one JSON object per line) or `csv`. |
+| `--format`, `-format` | `json` | `json` (one JSON object per line) or `csv`. |
 | `-c`, `--case` | `DEFAULT` | Key case: `DEFAULT` (column labels as returned), `snake` or `camel`. |
-| `--fetchsize` | `10000` | JDBC fetch size. Must be greater than zero. |
-| `--maxrows` | no limit | Maximum rows to write. Must be greater than zero. |
-| `--timeout` | no timeout | Query timeout in seconds. Must be greater than zero. |
-| `--custom` | none | Engine property as `key=value`; repeat for more. See `ConnectionParams` in the Javadoc for the keys. |
-| `--dry` | off | Print connection, query and format options (password redacted), then exit `0`. |
+| `--fetchsize`, `-fetchsize` | `10000` | JDBC fetch size. Must be greater than zero. |
+| `--maxrows`, `-maxrows` | no limit | Maximum rows to write. Must be greater than zero. |
+| `--timeout`, `-timeout` | no timeout | Query timeout in seconds. Must be greater than zero. |
+| `--custom`, `-custom` | none | Engine property as `key=value`; repeat for more. See `ConnectionParams` in the Javadoc for the keys. |
+| `--dry`, `-dry` | off | Print connection, query and format options (password redacted), then exit `0`. |
 | `--help` | | Show usage. |
 | `--version` | | Print the version. |
 
-Exit codes: `0` success, `1` the query or the output file failed (the message goes to stderr), `2` usage error (bad option value, unknown `--type`, `--format` or `--case`, or no password available).
+The single-dash forms `-dry`, `-format`, `-fetchsize`, `-timeout`, `-maxrows` and `-custom` are the 0.x spellings, kept so existing scripts keep working.
+
+Exit codes: `0` success, `1` the query or the output file failed (the message goes to stderr), `2` usage error (bad option value, unknown `--type`, `--format` or `--case`, no password available, or an SQL file or stdin that cannot be read). `--dry` never needs a password and exits `0` without one.
 
 The password comes from the `EXTRACT_DB_PASSWORD` environment variable, or a console prompt when that is unset. With neither, the command exits `2`. There is no password flag, on purpose: it would end up in shell history and process listings.
 

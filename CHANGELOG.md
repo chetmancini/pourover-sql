@@ -5,7 +5,9 @@
 ### Added
 
 - `Pourover`, a single entry point with `list`, `forEach`, `stream` and `writeTo`, plus the `ConnectionParams`, `QueryOptions`, `FormatOptions`, `KeyCase`, `OutputFormat`, `QueryException`, `RowStream` and `RowFormatter` types.
-- A picocli command line with `--help`, `--version`, `--format`, `--fetchsize`, `--timeout`, `--maxrows` and repeatable `--custom key=value`, and exit codes `0`, `1` and `2`.
+- `--help` and `--version` on the command line, and the exit codes `0`, `1` and `2`. The other flags existed in 0.x.
+- `RowWriter.begin(List<String>)`, a default no-op method called with the column keys before the first row (`CSVRowWriter` uses it to write the header, including for empty results). Custom `RowWriter` implementations compile unchanged and can override it.
+- `ResultSets.columnLabels(ResultSet)` is public.
 - A browser playground on in-memory H2 (`./gradlew :demo:run`) and runnable examples in `examples/`.
 - Unit tests on H2 and an opt-in end-to-end suite for PostgreSQL and MySQL in Testcontainers (`./gradlew e2eTest`).
 - A test that fails when the README snippets drift from the compiled examples.
@@ -26,7 +28,7 @@
 
 ### Fixed
 
-- `--maxrows` was read under the wrong key and ignored.
+- `--maxrows` was ignored because the option was read under the wrong key; it now limits rows.
 - `QueryParams(fetchSize, maxRows, timeout)` left the log frequency null because of an inverted null check.
 - The CLI failed with a `NullPointerException` when there was no password and no console; it now exits `2` with a message.
 - Query errors were logged and swallowed (`null` or `-1` returned); they now throw.
@@ -94,7 +96,7 @@ try (RowStream stream = db.stream("SELECT * FROM big_table")) {
 
 ### CLI
 
-- Rebuilt on picocli; the flags are unchanged. `--help` and `--version` are new (standard picocli options).
+- Rebuilt on picocli; the flags are unchanged, and the single-dash 0.x forms (`-dry`, `-format`, `-fetchsize`, `-timeout`, `-maxrows`, `-custom`) still work. `--help` and `--version` are new (standard picocli options).
 - Exit codes: `0` success, `1` query failure (the message goes to stderr, never the password or a stack trace), `2` usage error (bad or unknown option values, `--timeout`/`--fetchsize`/`--maxrows` of zero or less, an unknown `--type`, `--format` or `--case`, or no password available).
 - With no `EXTRACT_DB_PASSWORD` and no console the CLI now exits `2` with a clear message; before, it failed with a `NullPointerException`.
 - `--maxrows` now limits rows; before, the option was read under the wrong key and ignored.
@@ -103,9 +105,7 @@ try (RowStream stream = db.stream("SELECT * FROM big_table")) {
 
 ### Build
 
-- Gradle Kotlin DSL, Java 21 toolchain, JUnit 5 and AssertJ, H2-backed tests.
-- Package moved from `com.simondata.pouroversql` to `io.github.chetmancini.pouroversql`.
-- Replaced commons-cli with picocli. Dropped Guava, commons-collections, commons-text and commons-dbutils. `slf4j-simple` is now only on the CLI runtime classpath.
+- Java 21 toolchain and H2-backed tests (see Changed for the rest). The CLI is built on picocli instead of commons-cli. `slf4j-simple` is now only on the CLI runtime classpath.
 
 ### Known limitations
 
