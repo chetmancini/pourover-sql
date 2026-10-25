@@ -1,10 +1,14 @@
 # Copyright 2026 Chet Mancini
 # Licensed under the Apache License, Version 2.0.
 #
-# DRY RUN ONLY: builds the release artifacts and publishes them to a local staging
-# directory (build/staging-repo), uploaded as a workflow artifact. Nothing is sent to
-# Maven Central until the commented-out step below is deliberately enabled.
-name: Release (dry run)
+# Pushing a tag `vX.Y.Z` builds the library jars and the command-line jars, checks the tag
+# against gradle.properties, and creates a GitHub Release with the files and checksums.
+# A manual run (workflow_dispatch) builds everything and uploads it as workflow artifacts
+# only; it never creates a release.
+#
+# Nothing is sent to Maven Central. That step stays commented out at the bottom until the
+# Central Portal namespace for io.github.chetmancini is verified.
+name: Release
 
 on:
   push:
@@ -15,8 +19,8 @@ permissions:
   contents: read
 
 jobs:
-  stage:
-    name: Build and stage release artifacts
+  library:
+    name: Library jars and staging repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -27,7 +31,7 @@ jobs:
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v5
 
-      # Tag pushes must match the project version; manual dry runs skip this check
+      # Tag pushes must match the project version; manual runs skip this check
       # because the project version is a SNAPSHOT.
       - name: Verify tag matches project version
         if: github.ref_type == 'tag'
@@ -40,21 +44,108 @@ jobs:
             exit 1
           fi
 
-      # The shadow fat jar is intentionally not published to Central; only the library, sources
-      # and javadoc jars plus POM/module metadata are.
-      # `build` runs the unit tests and assembles the library jar, sources jar and javadoc jar.
+      # `build` runs the unit tests and assembles the library, sources and javadoc jars.
       - name: Build
         run: ./gradlew build
 
       - name: Publish to local staging repository
         run: ./gradlew publishAllPublicationsToStagingRepository
 
-      - name: Upload staging repository
-        uses: actions/upload-artifact@v4
+      - name: Collect library jars
+        run: |
+          mkdir -p dist
+          cp build/libs/pourover-sql-*.jar dist/
+          rm -f dist/*-all.jar
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: library-jars
+          path: dist/*.jar
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
         with:
           name: staging-repo
           path: build/staging-repo
           if-no-files-found: error
+
+  cli:
+    name: CLI jar (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: all, engines: "" }
+          - { name: postgres, engines: postgres }
+          - { name: mysql, engines: mysql }
+          - { name: sqlserver, engines: sqlserver }
+          - { name: snowflake, engines: snowflake }
+          - { name: redshift, engines: redshift }
+          - { name: informix, engines: informix }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v5
+
+      # An empty `engines` bundles every driver (the -all jar).
+      - name: Build CLI jar
+        env:
+          ENGINES: ${{ matrix.engines }}
+        run: |
+          if [ -n "$ENGINES" ]; then
+            ./gradlew shadowJar -Pengines="$ENGINES"
+          else
+            ./gradlew shadowJar
+          fi
+
+      # The jar must start and report its version; this catches a broken bundle.
+      - name: Smoke test
+        run: |
+          jar="$(ls build/libs/pourover-sql-*-${{ matrix.name }}.jar)"
+          java -jar "$jar" --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.name }}
+          path: build/libs/pourover-sql-*-${{ matrix.name }}.jar
+          if-no-files-found: error
+
+  github-release:
+    name: Create GitHub Release
+    if: github.ref_type == 'tag'
+    needs: [library, cli]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cd release
+          sha256sum ./*.jar > SHA256SUMS
+          cat SHA256SUMS
+          # A version with a hyphen (1.0.0-rc.1) is marked as a pre-release.
+          flags=""
+          case "$TAG" in *-*) flags="--prerelease" ;; esac
+          gh release create "$TAG" $flags --verify-tag --title "$TAG" \
+            --notes "See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md). CLI jars: \`-all\` bundles every JDBC driver; the others bundle one." \
+            ./*.jar SHA256SUMS
 
       # ---------------------------------------------------------------------------------
       # DISABLED: enable after Central Portal namespace verification for io.github.chetmancini

@@ -187,4 +187,4 @@ Apache License 2.0. See [LICENSE](LICENSE).
 
 ## Attribution
 
-Originally created at Simon Data, Inc., reboot by Chet Mancini. Existing source files keep their original Simon Data, Inc. copyright and license notices; new work is Copyright 2026 Chet Mancini. See [NOTICE](NOTICE). Offered without warranty.
+Originally created at Simon Data, Inc.; this is a derivative work by the same author, Chet Mancini. Existing source files keep their original Simon Data, Inc. copyright and license notices; new work is Copyright 2026 Chet Mancini. See [NOTICE](NOTICE). Offered without warranty.

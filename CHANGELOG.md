@@ -11,7 +11,7 @@
 - A browser playground on in-memory H2 (`./gradlew :demo:run`) and runnable examples in `examples/`.
 - Unit tests on H2 and an opt-in end-to-end suite for PostgreSQL and MySQL in Testcontainers (`./gradlew e2eTest`).
 - A test that fails when the README snippets drift from the compiled examples.
-- GitHub Actions workflows (CI, release dry run, Javadoc to Pages on manual dispatch), Dependabot, sources and Javadoc jars, `SECURITY.md`, `docs/drivers.md` and `docs/engines.md`.
+- GitHub Actions workflows (CI, a tag-triggered release workflow that attaches the library and CLI jars to a GitHub Release (Maven Central stays disabled), Javadoc to Pages on manual dispatch), Dependabot, sources and Javadoc jars, `SECURITY.md`, `docs/drivers.md` and `docs/engines.md`.
 
 ### Changed
 
