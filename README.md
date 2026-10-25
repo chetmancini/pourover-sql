@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/pourover-logo.png" alt="Pour-over coffee brewer with rows of data in the glass server" width="280">
+</p>
+
 # Pour-Over SQL
 
 [![CI](https://github.com/chetmancini/pourover-sql/actions/workflows/ci.yml/badge.svg)](https://github.com/chetmancini/pourover-sql/actions/workflows/ci.yml)
