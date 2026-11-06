@@ -4,8 +4,8 @@
 |--------|-------------------------|----------|---------------|------------|
 | PostgreSQL | `org.postgresql:postgresql:42.7.14`, class `org.postgresql.Driver` | Optional (`-Pengines`) | Add the artifact to your build | Yes (`postgres:16-alpine`) |
 | MySQL | `com.mysql:mysql-connector-j:26.10.0`, class `com.mysql.cj.jdbc.Driver` | Optional (`-Pengines`) | Add the artifact to your build | Yes (`mysql:8.4`) |
-| SQL Server | `com.microsoft.sqlserver:mssql-jdbc:13.6.1.jre11`, class `com.microsoft.sqlserver.jdbc.Driver` | Optional (`-Pengines`) | Add the artifact to your build | Not e2e tested |
-| Snowflake | `net.snowflake:snowflake-jdbc:4.4.0`, class `net.snowflake.client.jdbc.SnowflakeDriver` | Optional (`-Pengines`) | Add the artifact to your build | Not e2e tested |
+| SQL Server | `com.microsoft.sqlserver:mssql-jdbc:13.6.2.jre11`, class `com.microsoft.sqlserver.jdbc.Driver` | Optional (`-Pengines`) | Add the artifact to your build | Not e2e tested |
+| Snowflake | `net.snowflake:snowflake-jdbc:4.4.1`, class `net.snowflake.client.jdbc.SnowflakeDriver` | Optional (`-Pengines`) | Add the artifact to your build | Not e2e tested |
 | Redshift | `com.amazon.redshift:redshift-jdbc42:2.3.0` (Maven Central), class `com.amazon.redshift.Driver` | Optional (`-Pengines`) | Add the artifact to your build | Not e2e tested |
 | Informix | `com.ibm.informix:jdbc:15.0.1.4` (Maven Central), class `com.informix.jdbc.IfxDriver` | Optional (`-Pengines`) | Add the artifact to your build | Not e2e tested |
 | Athena | Official AWS Athena JDBC driver, class `com.amazon.athena.jdbc.AthenaDriver` (URL schemes `jdbc:athena`, deprecated `jdbc:awsathena`) | User-supplied | See below | Not e2e tested |

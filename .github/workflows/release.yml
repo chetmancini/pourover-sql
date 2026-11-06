@@ -24,12 +24,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       # Tag pushes must match the project version; manual runs skip this check
       # because the project version is a SNAPSHOT.
@@ -58,13 +58,13 @@ jobs:
           rm -f dist/*-all.jar
           ls -l dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: library-jars
           path: dist/*.jar
           if-no-files-found: error
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: staging-repo
           path: build/staging-repo
@@ -86,12 +86,12 @@ jobs:
           - { name: redshift, engines: redshift }
           - { name: informix, engines: informix }
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "21"
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
 
       # An empty `engines` bundles every driver (the -all jar).
       - name: Build CLI jar
@@ -110,7 +110,7 @@ jobs:
           jar="$(ls build/libs/pourover-sql-*-${{ matrix.name }}.jar)"
           java -jar "$jar" --version
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cli-${{ matrix.name }}
           path: build/libs/pourover-sql-*-${{ matrix.name }}.jar
@@ -125,9 +125,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           path: release
           merge-multiple: true
