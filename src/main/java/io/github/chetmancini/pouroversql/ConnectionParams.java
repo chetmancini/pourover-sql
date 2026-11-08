@@ -28,8 +28,10 @@ import java.util.TreeSet;
  *   <li><b>POSTGRESQL</b>: {@code ssl}, {@code binaryTransfer} (booleans); {@code kerberosServerName},
  *       {@code sslCert}, {@code sslKey}, {@code sslMode}, {@code sslPassword}, {@code sslRootCert};
  *       {@code readOnly} (boolean, defaults to {@code true}).</li>
- *   <li><b>SQLSERVER</b>: {@code encrypt}, {@code trustServerCertificate} (booleans, default
- *       {@code false}); {@code integratedSecurity} (boolean); {@code hostNameInCertificate},
+ *   <li><b>SQLSERVER</b>: {@code encrypt}, {@code trustServerCertificate} (booleans); omitted
+ *       {@code encrypt} follows the JDBC driver default (enabled in {@code mssql-jdbc:13.6.2.jre11}),
+ *       while omitted {@code trustServerCertificate} defaults to {@code false}; explicit
+ *       {@code encrypt=false} opts out; {@code integratedSecurity} (boolean); {@code hostNameInCertificate},
  *       {@code accessToken}, {@code authentication}, {@code authenticationScheme},
  *       {@code columnEncryptionSetting}, {@code failoverPartner}, {@code trustStore},
  *       {@code trustStorePassword}, {@code trustStoreType}.</li>

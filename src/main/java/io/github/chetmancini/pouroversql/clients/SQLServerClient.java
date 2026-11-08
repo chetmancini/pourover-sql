@@ -21,8 +21,9 @@ import io.github.chetmancini.pouroversql.ConnectionParams;
 import javax.sql.DataSource;
 
 /**
- * Client for SQLServer. Supported custom properties are listed on {@link ConnectionParams};
- * {@code encrypt} and {@code trustServerCertificate} default to {@code false}.
+ * Client for SQLServer. Supported custom properties are listed on {@link ConnectionParams}.
+ * Omitted {@code encrypt} follows the JDBC driver default (enabled in the tested driver), while
+ * {@code trustServerCertificate} defaults to {@code false}. Set {@code encrypt=false} to opt out.
  */
 public class SQLServerClient extends AbstractSQLClient {
 
@@ -51,8 +52,11 @@ public class SQLServerClient extends AbstractSQLClient {
         ds.setPortNumber(this.port(DEFAULT_PORT));
         ds.setDatabaseName(this.params.database());
 
-        // String overload: setEncrypt(boolean) is deprecated for removal in mssql-jdbc.
-        ds.setEncrypt(Boolean.toString(this.flag("encrypt")));
+        Boolean encrypt = this.booleanProperty("encrypt");
+        if (encrypt != null) {
+            // String overload: setEncrypt(boolean) is deprecated for removal in mssql-jdbc.
+            ds.setEncrypt(Boolean.toString(encrypt));
+        }
         ds.setTrustServerCertificate(this.flag("trustServerCertificate"));
         if (this.stringProperty("trustStore") != null) {
             ds.setTrustStore(this.stringProperty("trustStore"));

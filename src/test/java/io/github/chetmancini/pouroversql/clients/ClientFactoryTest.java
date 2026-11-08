@@ -110,11 +110,21 @@ class ClientFactoryTest {
     }
 
     @Test
-    void sqlServerEncryptDefaultsToFalseAsBefore() {
+    void sqlServerEncryptUsesDriverDefaultWhenOmitted() {
         SQLServerDataSource ds = (SQLServerDataSource) ClientFactory.makeSQLClient(SqlEngine.SQLSERVER,
                 new ConnectionParams(null, null, "u", null, "db", null)).dataSource();
         assertThat(ds.getServerName()).isEqualTo("localhost");
         assertThat(ds.getPortNumber()).isEqualTo(1433);
+        assertThat(ds.getEncrypt()).isEqualToIgnoringCase("true");
+        assertThat(ds.getTrustServerCertificate()).isFalse();
+    }
+
+    @Test
+    void sqlServerEncryptCanBeExplicitlyDisabled() {
+        Properties props = new Properties();
+        props.setProperty("encrypt", "false");
+        SQLServerDataSource ds = (SQLServerDataSource) ClientFactory.makeSQLClient(SqlEngine.SQLSERVER,
+                new ConnectionParams(null, null, "u", null, "db", props)).dataSource();
         assertThat(ds.getEncrypt()).isEqualToIgnoringCase("false");
         assertThat(ds.getTrustServerCertificate()).isFalse();
     }

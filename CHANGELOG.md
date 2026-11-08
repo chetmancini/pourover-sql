@@ -15,6 +15,7 @@
 
 ### Changed
 
+- SQL Server now leaves omitted `encrypt` to the JDBC driver's secure default while keeping `trustServerCertificate=false`; set `encrypt=false` to opt out explicitly.
 - JDBC drivers are optional: the library POM lists only `slf4j-api` and Gson, applications add the driver they use, and a missing driver fails with an `IllegalStateException` naming the artifact. The CLI fat jar bundles all drivers or a subset (`./gradlew shadowJar -Pengines=postgres,mysql`).
 - The Java API is rebuilt around records and `Pourover`; see the migration table below.
 - The package moved from `com.simondata.pouroversql` to `io.github.chetmancini.pouroversql`.
@@ -98,7 +99,7 @@ try (RowStream stream = db.stream("SELECT * FROM big_table")) {
 - **File output is UTF-8 everywhere,** including `FileRowWriter.open(OutputStream)`.
 - **Queries run with autocommit off.** When the connection arrives with autocommit on, `Pourover` turns it off for the query, rolls back, and turns it back on before the connection is closed or returned to a pool. This makes `fetchSize` stream with a cursor on PostgreSQL, which ignores it in autocommit mode. A connection already in a transaction (autocommit off) belongs to the caller and is left untouched: no rollback and no autocommit change. If the driver refuses to turn autocommit off (Informix databases without logging), the query runs in autocommit mode.
 - **Streams release connections.** `RowStream` closes its connection, statement and result set on `close()`, when its `Stream` is closed, or once the last row is read. `Pourover.of(DataSource)` never closes the caller's DataSource.
-- **Engine properties.** The PostgreSQL and SQL Server options formerly on `PostgreSQLSQLParams` and `SQLServerSQLParams` are read from `ConnectionParams.properties`, with the same keys and defaults: PostgreSQL connections are read-only unless `readOnly=false`, and SQL Server `encrypt` and `trustServerCertificate` default to `false`. Snowflake, Redshift and Athena now pass all properties to the driver, so Snowflake `warehouse` and `role` work. MySQL and Informix still ignore them.
+- **Engine properties.** The PostgreSQL and SQL Server options formerly on `PostgreSQLSQLParams` and `SQLServerSQLParams` are read from `ConnectionParams.properties`, with the same keys. PostgreSQL connections are read-only unless `readOnly=false`. SQL Server leaves omitted `encrypt` to the JDBC driver default (`true` in the tested driver), keeps `trustServerCertificate=false` by default, and accepts `encrypt=false` as an explicit opt-out. Snowflake, Redshift and Athena now pass all properties to the driver, so Snowflake `warehouse` and `role` work. MySQL and Informix still ignore them.
 - **Athena driver is user-supplied.** The official AWS driver is not on Maven Central, so it is no longer bundled; put it on the runtime classpath (see `docs/drivers.md`).
 - **Unsupported engines throw.** `ClientFactory` throws `IllegalArgumentException` for `ORACLE` and `BIGQUERY` instead of returning `null`.
 
