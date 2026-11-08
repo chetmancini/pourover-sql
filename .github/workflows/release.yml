@@ -19,17 +19,13 @@ permissions:
   contents: read
 
 jobs:
-  library:
-    name: Library jars and staging repository
+  check-tag:
+    name: Check tag
+    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: "21"
-      - uses: gradle/actions/setup-gradle@v6
 
       # Tag pushes must match the project version; manual runs skip this check
       # because the project version is a SNAPSHOT.
@@ -43,6 +39,19 @@ jobs:
             echo "Tag $TAG does not match gradle.properties version $version" >&2
             exit 1
           fi
+
+  library:
+    name: Library jars and staging repository
+    needs: check-tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v6
 
       # `build` runs the unit tests and assembles the library, sources and javadoc jars.
       - name: Build
@@ -72,6 +81,7 @@ jobs:
 
   cli:
     name: CLI jar (${{ matrix.name }})
+    needs: check-tag
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
