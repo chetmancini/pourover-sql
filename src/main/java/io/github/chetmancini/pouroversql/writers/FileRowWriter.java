@@ -24,13 +24,16 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.UncheckedIOException;
+import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
 /**
- * Base class for writers that print rows to a file or stream as UTF-8 text.
+ * Base class for writers that print rows to a file or stream as UTF-8 text. Outputs opened by this
+ * class throw {@link UncheckedIOException} on underlying write, flush and close failures rather
+ * than silently recording them.
  */
 public abstract class FileRowWriter extends AbstractRowWriter implements RowWriter {
 
@@ -43,6 +46,7 @@ public abstract class FileRowWriter extends AbstractRowWriter implements RowWrit
     /**
      * Abstract method.
      * @param row the row data to write out.
+     * @throws UncheckedIOException if the output cannot be written.
      */
     public abstract void writeRow(Map<String, Object> row);
 
@@ -69,7 +73,8 @@ public abstract class FileRowWriter extends AbstractRowWriter implements RowWrit
      */
     public void open(Path outputFile) {
         try {
-            this.writer = new PrintWriter(Files.newBufferedWriter(outputFile, StandardCharsets.UTF_8));
+            this.writer = new PrintWriter(new FailFastWriter(
+                    Files.newBufferedWriter(outputFile, StandardCharsets.UTF_8)));
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot open " + outputFile + " for writing", e);
         }
@@ -82,7 +87,8 @@ public abstract class FileRowWriter extends AbstractRowWriter implements RowWrit
      * @param outputStream the OutputStream to open.
      */
     public void open(OutputStream outputStream) {
-        this.writer = new PrintWriter(new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8)));
+        this.writer = new PrintWriter(new FailFastWriter(
+                new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8))));
         this.postOpenHook();
     }
 
@@ -95,22 +101,73 @@ public abstract class FileRowWriter extends AbstractRowWriter implements RowWrit
     }
 
     /**
-     * Flush and close the writer safely.
-     * @throws UncheckedIOException if buffered output could not be written.
+     * Flush and close buffered output, clear the writer even on failure, and run the post-close
+     * hook only after a successful close.
+     * @throws UncheckedIOException if buffered output cannot be written or output cannot be closed.
      */
     @Override
     public void close() {
         PrintWriter current = this.writer;
-        this.writer = null;
-        if (current != null) {
-            current.flush();
-            boolean failed = current.checkError();
-            current.close();
-            if (failed) {
-                this.postCloseHook();
-                throw new UncheckedIOException(new IOException("Error writing output"));
+        try {
+            if (current != null) {
+                current.close();
             }
+        } finally {
+            this.writer = null;
         }
         this.postCloseHook();
+    }
+
+    private static final class FailFastWriter extends Writer {
+        private final Writer delegate;
+
+        private FailFastWriter(Writer delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void write(int c) {
+            try {
+                delegate.write(c);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        @Override
+        public void write(char[] cbuf, int off, int len) {
+            try {
+                delegate.write(cbuf, off, len);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        @Override
+        public void write(String str, int off, int len) {
+            try {
+                delegate.write(str, off, len);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        @Override
+        public void flush() {
+            try {
+                delegate.flush();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        @Override
+        public void close() {
+            try {
+                delegate.close();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
     }
 }
