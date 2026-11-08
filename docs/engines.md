@@ -12,7 +12,7 @@ How each engine is reached, as implemented in `io.github.chetmancini.pouroversql
 | Informix | `informix`, `ibm_informix` | 1526 | `IfxDataSource` with host, port, database, user, password | No |
 | Amazon Athena | `athena`, `awsathena`, `aws_athena` | none | The host is the full JDBC URL, for example `jdbc:athena://region=us-east-1;Workgroup=primary` | No |
 
-The host defaults to `localhost` for PostgreSQL, MySQL, SQL Server and Informix. Snowflake and Redshift need an explicit host.
+The host defaults to `localhost` for PostgreSQL, MySQL, SQL Server, Informix, Snowflake and Redshift.
 
 `ORACLE` and `BIGQUERY` are recognised names with no client; asking for them throws `IllegalArgumentException`.
 

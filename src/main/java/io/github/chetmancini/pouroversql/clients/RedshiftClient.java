@@ -25,6 +25,7 @@ import io.github.chetmancini.pouroversql.ConnectionParams;
  */
 public class RedshiftClient extends AbstractSQLClient {
 
+    private static final String DEFAULT_HOST = "localhost";
     private static final int DEFAULT_PORT = 5439;
 
     /**
@@ -37,7 +38,7 @@ public class RedshiftClient extends AbstractSQLClient {
 
     private String getRedshiftURL() {
         return String.format("jdbc:redshift://%s:%s/%s",
-                this.params.host(), this.port(DEFAULT_PORT), this.params.database()
+                this.host(DEFAULT_HOST), this.port(DEFAULT_PORT), this.params.database()
         );
     }
 
