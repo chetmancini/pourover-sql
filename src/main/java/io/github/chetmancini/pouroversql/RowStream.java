@@ -43,7 +43,8 @@ import java.util.stream.StreamSupport;
  * <p>Closing the {@link Stream} returned by {@link #rows()} also closes this RowStream, and the
  * resources are released as soon as the last row has been read or a row fails to read.
  * {@link #close()} is idempotent.
- * Read errors surface as {@link QueryException}. Instances are not meant to be shared between threads.
+ * SQL read errors surface as {@link QueryException}; runtime mapping failures and errors propagate unchanged
+ * after resources are released. Instances are not meant to be shared between threads.
  */
 public final class RowStream implements AutoCloseable {
 
@@ -117,6 +118,13 @@ public final class RowStream implements AutoCloseable {
                 e.addSuppressed(closeFailure);
             }
             throw QueryException.wrap(e, scrubber);
+        } catch (RuntimeException | Error e) {
+            try {
+                close();
+            } catch (RuntimeException | Error closeFailure) {
+                e.addSuppressed(closeFailure);
+            }
+            throw e;
         }
         count++;
         if (count % logFrequency == 0) {
