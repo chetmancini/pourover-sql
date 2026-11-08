@@ -21,6 +21,7 @@ import java.lang.reflect.Proxy;
 import java.sql.Array;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,6 +32,10 @@ class ResultSetsTest {
     private static ResultSet rowWithArray(Object javaArray) {
         Array sqlArray = (Array) Proxy.newProxyInstance(Array.class.getClassLoader(), new Class<?>[] {Array.class},
                 (p, method, args) -> method.getName().equals("getArray") ? javaArray : null);
+        return rowWithValue(sqlArray);
+    }
+
+    private static ResultSet rowWithValue(Object value) {
         ResultSetMetaData meta = (ResultSetMetaData) Proxy.newProxyInstance(
                 ResultSetMetaData.class.getClassLoader(), new Class<?>[] {ResultSetMetaData.class},
                 (p, method, args) -> switch (method.getName()) {
@@ -41,9 +46,51 @@ class ResultSetsTest {
         return (ResultSet) Proxy.newProxyInstance(ResultSet.class.getClassLoader(), new Class<?>[] {ResultSet.class},
                 (p, method, args) -> switch (method.getName()) {
                     case "getMetaData" -> meta;
-                    case "getObject" -> sqlArray;
+                    case "getObject" -> value;
                     default -> null;
                 });
+    }
+
+    @Test
+    void directObjectArrayBecomesList() throws Exception {
+        Object value = ResultSets.toMap(rowWithValue(new String[] {"a", "b"})).get("v");
+
+        assertThat(value).isEqualTo(List.of("a", "b"));
+    }
+
+    @Test
+    void directPrimitiveArrayBecomesList() throws Exception {
+        Object value = ResultSets.toMap(rowWithValue(new int[] {1, 2})).get("v");
+
+        assertThat(value).isEqualTo(List.of(1, 2));
+    }
+
+    @Test
+    void directNestedArrayPreservesNestingAndNull() throws Exception {
+        Object value = ResultSets.toMap(rowWithValue(new Object[] {new String[] {"a"}, null})).get("v");
+
+        assertThat(value).isEqualTo(Arrays.asList(List.of("a"), null));
+    }
+
+    @Test
+    void directByteArrayRemainsBase64() throws Exception {
+        Object value = ResultSets.toMap(rowWithValue(new byte[] {1, 2, 3})).get("v");
+
+        assertThat(value).isEqualTo("AQID");
+    }
+
+    @Test
+    void nonArrayDriverObjectUsesToString() throws Exception {
+        Object driverValue = new Object() {
+            @Override
+            public String toString() {
+                return "{\"kind\":\"placeholder\"}";
+            }
+        };
+
+        Object value = ResultSets.toMap(rowWithValue(driverValue)).get("v");
+
+        assertThat(value).isEqualTo("{\"kind\":\"placeholder\"}");
     }
 
     @Test

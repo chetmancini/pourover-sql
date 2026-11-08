@@ -30,6 +30,7 @@
 
 ### Fixed
 
+- Direct Java object and primitive arrays returned by JDBC are now materialized as nested lists, while `byte[]` remains Base64.
 - Omitted Redshift and Snowflake hosts now use `localhost` rather than placing the literal text `null` in the JDBC URL.
 - `RowStream` now releases its result set, statement and connection when row mapping throws a runtime exception or error; the original throwable is rethrown, with any cleanup failure suppressed.
 - File output no longer silently succeeds when the underlying writer fails during a row write or only while closing; these failures now propagate as `UncheckedIOException`, and post-close hooks run only after a successful close.
