@@ -47,7 +47,8 @@ public final class ResultSets {
      * <p>Values are materialized while the row is current, so the map stays usable after the
      * connection closes:
      * <ul>
-     *   <li>{@link Array} becomes a {@link List} (elements materialized the same way);</li>
+     *   <li>SQL {@link Array} values and direct Java arrays become {@link List}s (nested arrays nest;
+     *       {@code byte[]} remains Base64);</li>
      *   <li>{@link Clob} and {@link SQLXML} become a {@link String};</li>
      *   <li>{@link Blob} and {@code byte[]} become a Base64 string (RFC 4648, no line breaks);</li>
      *   <li>any other value whose class is not from {@code java.*} or {@code javax.*} (for example
@@ -76,7 +77,7 @@ public final class ResultSets {
         }
         if (value instanceof Array array) {
             try {
-                return toList(array.getArray());
+                return materializeArray(array.getArray());
             } finally {
                 free(array::free);
             }
@@ -107,6 +108,9 @@ public final class ResultSets {
         if (value instanceof byte[] bytes) {
             return base64(bytes);
         }
+        if (value.getClass().isArray()) {
+            return materializeArray(value);
+        }
         if (value instanceof Number || value instanceof java.util.Date || value instanceof TemporalAccessor
                 || isPlatformType(value.getClass())) {
             return value;
@@ -114,7 +118,7 @@ public final class ResultSets {
         return value.toString();
     }
 
-    private static List<Object> toList(Object array) throws SQLException {
+    private static List<Object> materializeArray(Object array) throws SQLException {
         if (array == null) {
             return null;
         }
@@ -129,7 +133,7 @@ public final class ResultSets {
             Object element = java.lang.reflect.Array.get(array, i);
             // Multi-dimensional arrays (pgjdbc returns Integer[][]) nest; byte[] stays a Base64 leaf.
             boolean nested = element != null && element.getClass().isArray() && !(element instanceof byte[]);
-            list.add(nested ? toList(element) : materialize(element));
+            list.add(nested ? materializeArray(element) : materialize(element));
         }
         return list;
     }
