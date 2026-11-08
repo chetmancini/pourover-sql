@@ -64,18 +64,25 @@ class QueryExceptionTest {
     }
 
     @Test
-    void credentialsFromQueryAndSemicolonJdbcUrlsAreScrubbed() {
+    void credentialsFromInitialQueryAndSemicolonJdbcUrlsAreScrubbed() {
+        String initialSecret = secret();
         String querySecret = secret();
         String semicolonSecret = secret();
+        String initialUrl = "jdbc:awsathena://AuthToken=" + initialSecret + ";Workgroup=primary";
         String queryUrl = "jdbc:athena://query.example?Workgroup=primary&AwsCredential=" + querySecret
                 + "&Region=us-east-1";
         String semicolonUrl = "jdbc:athena://semicolon.example;Workgroup=secondary;AuthToken="
                 + semicolonSecret + ";Region=us-west-2";
 
+        QueryException initial = wrap(
+                new SQLException("driver echoed " + initialUrl), params(initialUrl, null, null));
         QueryException query = wrap(new SQLException("driver echoed " + queryUrl), params(queryUrl, null, null));
         QueryException semicolon = wrap(
                 new SQLException("driver echoed " + semicolonUrl), params(semicolonUrl, null, null));
 
+        assertThat(initial.getMessage()).doesNotContain(initialSecret)
+                .contains("Workgroup=primary", "AuthToken=[REDACTED]");
+        assertThat(initial.getCause().getMessage()).doesNotContain(initialSecret);
         assertThat(query.getMessage()).doesNotContain(querySecret)
                 .contains("Workgroup=primary", "Region=us-east-1", "AwsCredential=[REDACTED]");
         assertThat(query.getCause().getMessage()).doesNotContain(querySecret);

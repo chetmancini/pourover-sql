@@ -50,18 +50,23 @@ class OptionsTest {
 
     @Test
     void connectionParamsRedactsOnlySecretJdbcUrlPropertyValues() {
+        String initialSecret = "initial-" + UUID.randomUUID();
         String querySecret = "query-" + UUID.randomUUID();
         String semicolonSecret = "semicolon-" + UUID.randomUUID();
+        String initialUrl = "jdbc:athena://AwsCredential=" + initialSecret + ";Workgroup=primary";
         String queryUrl = "jdbc:athena://query.example?Workgroup=primary&AwsCredential=" + querySecret
                 + "&Region=us-east-1";
         String semicolonUrl = "jdbc:athena://semicolon.example;Workgroup=secondary;AuthToken="
                 + semicolonSecret + ";Region=us-west-2";
 
+        String initial = new ConnectionParams(initialUrl, null, "u", null, "db", null).toString();
         String query = new ConnectionParams(queryUrl, null, "u", null, "db", null).toString();
         String semicolon = new ConnectionParams(semicolonUrl, null, "u", null, "db", null).toString();
         String ordinaryHost = new ConnectionParams(
                 "credential.example", null, "u", null, "db", null).toString();
 
+        assertThat(initial).doesNotContain(initialSecret)
+                .contains("Workgroup=primary", "AwsCredential=[REDACTED]");
         assertThat(query).doesNotContain(querySecret)
                 .contains("Workgroup=primary", "AwsCredential=[REDACTED]", "Region=us-east-1");
         assertThat(semicolon).doesNotContain(semicolonSecret)

@@ -32,7 +32,8 @@ final class CredentialScrubber {
     static final String REDACTED = "[REDACTED]";
 
     private static final CredentialScrubber EMPTY = new CredentialScrubber(List.of());
-    private static final Pattern URL_PROPERTY = Pattern.compile("[?;&]([^?;&=]+)=([^;&]*)");
+    private static final Pattern URL_PROPERTY = Pattern.compile(
+            "(?:^jdbc:(?:athena|awsathena)://|[?;&])([^?;&=]+)=([^;&]*)");
 
     private final List<String> secrets;
 

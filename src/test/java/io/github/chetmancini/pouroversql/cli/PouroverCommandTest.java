@@ -170,7 +170,7 @@ class PouroverCommandTest {
         String urlSecret = "url-" + UUID.randomUUID();
         String passphrase = "phrase-" + UUID.randomUUID();
         String credential = "credential-" + UUID.randomUUID();
-        String host = "jdbc:athena://athena.example;Workgroup=primary;AwsCredential=" + urlSecret;
+        String host = "jdbc:athena://AwsCredential=" + urlSecret + ";Workgroup=primary";
 
         int code = run("", password, "--dry", "--type", "athena", "-u", "me", "-h", host,
                 "--custom", "KeyPassPhrase=" + passphrase,
@@ -179,7 +179,7 @@ class PouroverCommandTest {
 
         assertThat(code).isZero();
         assertThat(out.toString()).doesNotContain(password, urlSecret, passphrase, credential)
-                .contains("athena.example", "Workgroup=primary", "region=us-east-1", "[REDACTED]");
+                .contains("AwsCredential=[REDACTED]", "Workgroup=primary", "region=us-east-1");
         assertThat(err.toString()).isEmpty();
         assertThat(seenParams).isNull();
         assertThat(dir.resolve("out.txt")).doesNotExist();
