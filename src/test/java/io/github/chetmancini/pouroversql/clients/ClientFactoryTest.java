@@ -130,6 +130,14 @@ class ClientFactoryTest {
     }
 
     @Test
+    void snowflakeDefaultsHostToLocalhost() {
+        DriverManagerDataSource ds = (DriverManagerDataSource) ClientFactory.makeSQLClient(SqlEngine.SNOWFLAKE,
+                new ConnectionParams(null, null, "u", null, "db", null)).dataSource();
+
+        assertThat(ds.url()).isEqualTo("jdbc:snowflake://localhost");
+    }
+
+    @Test
     void snowflakePassesPropertiesThroughToDriver() {
         String secret = "pw-" + UUID.randomUUID();
         Properties props = new Properties();
@@ -153,6 +161,14 @@ class ClientFactoryTest {
 
         assertThat(ds.toString()).doesNotContain(url, secret, "jdbc:athena");
         assertThat(ds.url()).isEqualTo(url);
+    }
+
+    @Test
+    void redshiftDefaultsHostToLocalhost() {
+        DriverManagerDataSource ds = (DriverManagerDataSource) ClientFactory.makeSQLClient(SqlEngine.REDSHIFT,
+                new ConnectionParams(null, null, "u", null, "dev", null)).dataSource();
+
+        assertThat(ds.url()).isEqualTo("jdbc:redshift://localhost:5439/dev");
     }
 
     @Test

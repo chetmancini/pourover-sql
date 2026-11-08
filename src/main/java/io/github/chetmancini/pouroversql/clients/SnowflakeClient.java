@@ -31,6 +31,8 @@ import java.util.Properties;
  */
 public class SnowflakeClient extends AbstractSQLClient {
 
+    private static final String DEFAULT_HOST = "localhost";
+
     /**
      * Constructor
      * @param params connection settings.
@@ -45,7 +47,7 @@ public class SnowflakeClient extends AbstractSQLClient {
         if (this.params.database() != null) {
             props.setProperty("db", this.params.database());
         }
-        String host = this.params.host();
+        String host = this.host(DEFAULT_HOST);
         String port = this.params.port() != null ? ":" + this.params.port() : "";
         return new DriverManagerDataSource("jdbc:snowflake://" + host + port, props);
     }
