@@ -50,13 +50,12 @@ public final class FileExample {
         }
 
         Pourover db = Pourover.of(dataSource);
+        // snippet:start file
         FormatOptions snake = new FormatOptions(KeyCase.SNAKE);
         Path dir = Files.createTempDirectory("pourover-example");
         try {
-            // snippet:start file
             Path jsonl = db.writeTo("SELECT * FROM cups", dir.resolve("cups.jsonl"), OutputFormat.JSONL, snake);
             Path csv = db.writeTo("SELECT * FROM cups", dir.resolve("cups.csv"), OutputFormat.CSV, snake);
-            // snippet:end file
             System.out.println("--- cups.jsonl");
             System.out.print(Files.readString(jsonl));
             System.out.println("--- cups.csv");
@@ -66,5 +65,6 @@ public final class FileExample {
             Files.deleteIfExists(dir.resolve("cups.csv"));
             Files.deleteIfExists(dir);
         }
+        // snippet:end file
     }
 }
