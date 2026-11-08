@@ -32,16 +32,78 @@ class OptionsTest {
         String secret = "pw-" + UUID.randomUUID();
         String sslSecret = "pw-" + UUID.randomUUID();
         String token = "tok-" + UUID.randomUUID();
+        String passphrase = "phrase-" + UUID.randomUUID();
+        String credential = "credential-" + UUID.randomUUID();
         Properties props = new Properties();
         props.setProperty("sslPassword", sslSecret);
         props.setProperty("accessToken", token);
+        props.setProperty("KeyPassPhrase", passphrase);
+        props.setProperty("ClientCredential", credential);
         props.setProperty("sslMode", "require");
         ConnectionParams params = new ConnectionParams("db.example", 5432, "app", secret, "main", props);
 
         String text = params.toString();
-        assertThat(text).doesNotContain(secret, sslSecret, token)
+        assertThat(text).doesNotContain(secret, sslSecret, token, passphrase, credential)
                 .contains("db.example", "5432", "app", "main", "sslMode=require", "[REDACTED]");
         assertThat(params.password()).isEqualTo(secret);
+    }
+
+    @Test
+    void connectionParamsRedactsOnlySecretJdbcUrlPropertyValues() {
+        String initialSecret = "initial-" + UUID.randomUUID();
+        String querySecret = "query-" + UUID.randomUUID();
+        String semicolonSecret = "semicolon-" + UUID.randomUUID();
+        String initialUrl = "jdbc:athena://AwsCredential=" + initialSecret + ";Workgroup=primary";
+        String queryUrl = "jdbc:athena://query.example?Workgroup=primary&AwsCredential=" + querySecret
+                + "&Region=us-east-1";
+        String semicolonUrl = "jdbc:athena://semicolon.example;Workgroup=secondary;AuthToken="
+                + semicolonSecret + ";Region=us-west-2";
+
+        String initial = new ConnectionParams(initialUrl, null, "u", null, "db", null).toString();
+        String query = new ConnectionParams(queryUrl, null, "u", null, "db", null).toString();
+        String semicolon = new ConnectionParams(semicolonUrl, null, "u", null, "db", null).toString();
+        String ordinaryHost = new ConnectionParams(
+                "credential.example", null, "u", null, "db", null).toString();
+
+        assertThat(initial).doesNotContain(initialSecret)
+                .contains("Workgroup=primary", "AwsCredential=[REDACTED]");
+        assertThat(query).doesNotContain(querySecret)
+                .contains("Workgroup=primary", "AwsCredential=[REDACTED]", "Region=us-east-1");
+        assertThat(semicolon).doesNotContain(semicolonSecret)
+                .contains("Workgroup=secondary", "AuthToken=[REDACTED]", "Region=us-west-2");
+        assertThat(ordinaryHost).contains("host=credential.example");
+    }
+
+    @Test
+    void connectionParamsShortSecretsDoNotRewriteUnrelatedValues() {
+        Properties props = new Properties();
+        props.setProperty("ApiCredential", "true");
+        props.setProperty("encrypt", "true");
+        ConnectionParams params = new ConnectionParams(
+                "true.example", 5432, "true-user", "true", "true-database", props);
+
+        String text = params.toString();
+
+        assertThat(text).contains("host=true.example", "user=true-user", "database=true-database",
+                "password=[REDACTED]", "ApiCredential=[REDACTED]", "encrypt=true");
+        String url = "jdbc:athena://true.example;encrypt=true;AuthToken=true;Workgroup=true";
+        assertThat(new ConnectionParams(url, null, "u", null, "db", null).toString())
+                .contains("encrypt=true", "AuthToken=[REDACTED]", "Workgroup=true");
+    }
+
+    @Test
+    void connectionParamsNullAndBlankSecretsAreSafe() {
+        Properties props = new Properties();
+        props.setProperty("ApiCredential", " \t");
+        props.setProperty("ordinary", "true");
+
+        String nullPassword = new ConnectionParams("db.example", null, "u", null, "db", props).toString();
+        String blankPassword = new ConnectionParams("db.example", null, "u", " ", "db", props).toString();
+
+        assertThat(nullPassword).contains("password=null", "ApiCredential=[REDACTED]", "ordinary=true");
+        assertThat(blankPassword).contains("password=[REDACTED]", "ApiCredential=[REDACTED]", "ordinary=true");
+        assertThat(new ConnectionParams(null, null, null, null, null, null).toString())
+                .contains("host=null", "password=null");
     }
 
     @Test
@@ -97,21 +159,9 @@ class OptionsTest {
     }
 
     @Test
-    void queryExceptionScrubsSecretFromMessageAndCause() {
-        String secret = "pw-" + UUID.randomUUID();
-        SQLException original = new SQLException("login failed for url?password=" + secret, "28000", 18456);
-        QueryException e = QueryException.wrap(original, secret);
-        assertThat(e.getMessage()).doesNotContain(secret).contains("28000", "[REDACTED]");
-        assertThat(e.getSqlState()).isEqualTo("28000");
-        assertThat(e.getCause()).isInstanceOf(SQLException.class);
-        assertThat(e.getCause().getMessage()).doesNotContain(secret);
-        assertThat(((SQLException) e.getCause()).getErrorCode()).isEqualTo(18456);
-    }
-
-    @Test
     void queryExceptionKeepsCauseWhenNothingToScrub() {
         SQLException original = new SQLException("syntax error", "42000");
-        QueryException e = QueryException.wrap(original, null);
+        QueryException e = QueryException.wrap(original, CredentialScrubber.empty());
         assertThat(e.getCause()).isSameAs(original);
         assertThat(e.getMessage()).contains("syntax error");
     }

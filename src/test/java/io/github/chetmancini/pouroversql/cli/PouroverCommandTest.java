@@ -166,6 +166,26 @@ class PouroverCommandTest {
     }
 
     @Test
+    void dryRunRedactsCustomAndAthenaUrlCredentials() {
+        String urlSecret = "url-" + UUID.randomUUID();
+        String passphrase = "phrase-" + UUID.randomUUID();
+        String credential = "credential-" + UUID.randomUUID();
+        String host = "jdbc:athena://AwsCredential=" + urlSecret + ";Workgroup=primary";
+
+        int code = run("", password, "--dry", "--type", "athena", "-u", "me", "-h", host,
+                "--custom", "KeyPassPhrase=" + passphrase,
+                "--custom", "ClientCredential=" + credential,
+                "--custom", "region=us-east-1");
+
+        assertThat(code).isZero();
+        assertThat(out.toString()).doesNotContain(password, urlSecret, passphrase, credential)
+                .contains("AwsCredential=[REDACTED]", "Workgroup=primary", "region=us-east-1");
+        assertThat(err.toString()).isEmpty();
+        assertThat(seenParams).isNull();
+        assertThat(dir.resolve("out.txt")).doesNotExist();
+    }
+
+    @Test
     void zeroTimeoutIsUsageError() {
         int code = run("SELECT 1", password, "-u", "me", "--timeout", "0");
         assertThat(code).isEqualTo(2);
