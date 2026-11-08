@@ -30,6 +30,7 @@
 
 ### Fixed
 
+- `RowStream` now releases its result set, statement and connection when row mapping throws a runtime exception or error; the original throwable is rethrown, with any cleanup failure suppressed.
 - File output no longer silently succeeds when the underlying writer fails during a row write or only while closing; these failures now propagate as `UncheckedIOException`, and post-close hooks run only after a successful close.
 - Credential redaction now covers recognized custom-property values and credentials embedded in full JDBC URLs, in addition to the main password. `QueryException` sanitizes nested cause, next-exception and suppressed diagnostics with cycle-safe iterative traversal, preserving SQL state, vendor codes, stack traces, shared diagnostics and SQL next-exception cycles; unsafe cause or suppressed back edges on generic copies are terminated. `DriverManagerDataSource.toString()` no longer includes the credential-bearing JDBC URL.
 - `--maxrows` was ignored because the option was read under the wrong key; it now limits rows.
