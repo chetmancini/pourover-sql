@@ -20,7 +20,7 @@ The host defaults to `localhost` for PostgreSQL, MySQL, SQL Server and Informix.
 
 `ConnectionParams.properties` (CLI: `--custom key=value`) carries engine options:
 
-- PostgreSQL and SQL Server read a fixed list of keys (listed in the `ConnectionParams` Javadoc). PostgreSQL connections are read-only unless `readOnly=false`; SQL Server `encrypt` and `trustServerCertificate` default to `false`.
+- PostgreSQL and SQL Server read a fixed list of keys (listed in the `ConnectionParams` Javadoc). PostgreSQL connections are read-only unless `readOnly=false`; omitted SQL Server `encrypt` uses the driver's default (`true` for the tested driver), `trustServerCertificate` defaults to `false`, and `encrypt=false` is an explicit opt-out.
 - Snowflake, Redshift and Athena pass every property to the driver.
 - MySQL and Informix ignore properties.
 

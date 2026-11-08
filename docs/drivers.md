@@ -34,6 +34,7 @@ Supply the jar on the classpath:
 
 ## Engine notes
 
+- **SQL Server.** Omitting `encrypt` uses the driver's default (`true` for `mssql-jdbc:13.6.2.jre11`). Certificate trust is not relaxed: `trustServerCertificate` remains `false` by default. Set `encrypt=false` to opt out explicitly.
 - **Redshift.** The `language` connection property no longer exists in the Redshift 2.x driver, so it was dropped. Other properties are passed to the driver as is.
 - **Snowflake.** The host must be the account URL, `<account>.snowflakecomputing.com`. The client builds `jdbc:snowflake://<host>[:<port>]` from it and sets the database as the `db` property. Properties such as `warehouse` and `role` are passed to the driver.
 
