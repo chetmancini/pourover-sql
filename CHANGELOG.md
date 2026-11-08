@@ -15,6 +15,7 @@
 
 ### Changed
 
+- Row mapping caches raw labels, formatted output keys, and per-column key correlation once per result set; rows no longer reread JDBC metadata or reformat keys.
 - SQL Server now leaves omitted `encrypt` to the JDBC driver's secure default while keeping `trustServerCertificate=false`; set `encrypt=false` to opt out explicitly.
 - JDBC drivers are optional: the library POM lists only `slf4j-api` and Gson, applications add the driver they use, and a missing driver fails with an `IllegalStateException` naming the artifact. The CLI fat jar bundles all drivers or a subset (`./gradlew shadowJar -Pengines=postgres,mysql`).
 - The Java API is rebuilt around records and `Pourover`; see the migration table below.

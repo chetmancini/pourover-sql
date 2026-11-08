@@ -16,6 +16,8 @@
 
 package io.github.chetmancini.pouroversql.util;
 
+import io.github.chetmancini.pouroversql.FormatOptions;
+
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
@@ -26,6 +28,7 @@ import java.sql.SQLXML;
 import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -62,13 +65,72 @@ public final class ResultSets {
      * @throws SQLException on JDBC errors
      */
     public static Map<String, Object> toMap(ResultSet rs) throws SQLException {
-        ResultSetMetaData meta = rs.getMetaData();
-        int columns = meta.getColumnCount();
-        Map<String, Object> row = new LinkedHashMap<>(columns * 2);
-        for (int i = 1; i <= columns; i++) {
-            row.put(label(meta, i), materialize(rs.getObject(i)));
+        return new RowMapping(rs, FormatOptions.defaults()).mapCurrentRow();
+    }
+
+    /**
+     * Cached column labels and formatted output keys for one result set. Duplicate raw labels keep
+     * their first output position, and the later column's value wins when a row is mapped.
+     */
+    public static final class RowMapping {
+        private final ResultSet rs;
+        private final List<String> outputKeys;
+        private final String[] physicalKeys;
+
+        /**
+         * Read and cache the labels and formatted output keys for one result set.
+         * @param rs a result set whose metadata remains valid while this mapping is used
+         * @param options the output-key formatting options
+         * @throws SQLException on JDBC metadata errors
+         * @throws IllegalStateException if distinct raw labels format to the same output key
+         */
+        public RowMapping(ResultSet rs, FormatOptions options) throws SQLException {
+            this.rs = rs;
+            ResultSetMetaData meta = rs.getMetaData();
+            int columns = meta.getColumnCount();
+            List<String> rawLabels = new ArrayList<>(columns);
+            Map<String, Object> uniqueLabels = new LinkedHashMap<>(columns * 2);
+            for (int i = 1; i <= columns; i++) {
+                String rawLabel = label(meta, i);
+                rawLabels.add(rawLabel);
+                uniqueLabels.putIfAbsent(rawLabel, null);
+            }
+            Map<String, Object> formattedLabels = options.formatKeys(uniqueLabels);
+            this.outputKeys = List.copyOf(formattedLabels.keySet());
+            Map<String, String> formattedByRaw = new LinkedHashMap<>(uniqueLabels.size() * 2);
+            Iterator<String> rawKeys = uniqueLabels.keySet().iterator();
+            Iterator<String> formattedKeys = formattedLabels.keySet().iterator();
+            while (rawKeys.hasNext()) {
+                formattedByRaw.put(rawKeys.next(), formattedKeys.next());
+            }
+            this.physicalKeys = new String[columns];
+            for (int i = 0; i < columns; i++) {
+                this.physicalKeys[i] = formattedByRaw.get(rawLabels.get(i));
+            }
         }
-        return row;
+
+        /**
+         * Return the cached formatted output keys without reading JDBC metadata again.
+         * @return an immutable ordered list of unique output keys
+         */
+        public List<String> outputKeys() {
+            return outputKeys;
+        }
+
+        /**
+         * Map the current row using the cached output keys and the materialization rules documented
+         * by {@link #toMap(ResultSet)}. The result set must be positioned on a row, and SQL NULL maps
+         * to null.
+         * @return a new ordered map for the current row
+         * @throws SQLException on JDBC read or value-materialization errors
+         */
+        public Map<String, Object> mapCurrentRow() throws SQLException {
+            Map<String, Object> row = new LinkedHashMap<>(physicalKeys.length * 2);
+            for (int i = 0; i < physicalKeys.length; i++) {
+                row.put(physicalKeys[i], materialize(rs.getObject(i + 1)));
+            }
+            return row;
+        }
     }
 
     private static Object materialize(Object value) throws SQLException {
