@@ -106,8 +106,20 @@ try (RowStream stream = db.stream("SELECT \"N\" FROM numbers")) {
 `writeTo` writes JSONL or CSV, with optional key-case conversion:
 
 ```java
-Path jsonl = db.writeTo("SELECT * FROM cups", dir.resolve("cups.jsonl"), OutputFormat.JSONL, snake);
-Path csv = db.writeTo("SELECT * FROM cups", dir.resolve("cups.csv"), OutputFormat.CSV, snake);
+FormatOptions snake = new FormatOptions(KeyCase.SNAKE);
+Path dir = Files.createTempDirectory("pourover-example");
+try {
+    Path jsonl = db.writeTo("SELECT * FROM cups", dir.resolve("cups.jsonl"), OutputFormat.JSONL, snake);
+    Path csv = db.writeTo("SELECT * FROM cups", dir.resolve("cups.csv"), OutputFormat.CSV, snake);
+    System.out.println("--- cups.jsonl");
+    System.out.print(Files.readString(jsonl));
+    System.out.println("--- cups.csv");
+    System.out.print(Files.readString(csv));
+} finally {
+    Files.deleteIfExists(dir.resolve("cups.jsonl"));
+    Files.deleteIfExists(dir.resolve("cups.csv"));
+    Files.deleteIfExists(dir);
+}
 ```
 
 `forEach` hands each row to a `Consumer` and returns the row count. `QueryOptions` sets fetch size, max rows and timeout; `FormatOptions` sets the key case (`DEFAULT`, `SNAKE`, `CAMEL`).

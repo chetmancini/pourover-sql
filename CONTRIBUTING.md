@@ -11,7 +11,10 @@ You need Java 21 and nothing else; the Gradle wrapper does the rest.
 ./gradlew test           # unit tests only
 ./gradlew javadoc        # must finish with no warnings
 ./gradlew :demo:run      # the browser playground on http://localhost:8080
+./gradlew :run --console=plain -q --args='--dry --type postgresql --user dry-run'  # fast CLI dry run
 ```
+
+The root `:run` task compiles only what the CLI needs and runs it directly instead of assembling the all-driver fat jar or starting the example and playground applications. The placeholder user satisfies CLI parsing; these arguments perform a dry run, so no database connection or password is needed.
 
 The unit tests use an in-memory H2 database and need no services.
 

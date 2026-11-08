@@ -17,4 +17,4 @@ Run one from the repository root:
 ./gradlew :examples:run -PmainClass=io.github.chetmancini.pouroversql.examples.FileExample
 ```
 
-Without `-PmainClass`, `ListExample` runs. You can also run each `main` from your IDE.
+Without `-PmainClass`, `ListExample` runs. You can also run those three `main` methods from your IDE; `ConnectExample` is compile-only and has no `main`.
