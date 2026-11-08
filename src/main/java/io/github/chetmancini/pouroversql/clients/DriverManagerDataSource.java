@@ -28,7 +28,7 @@ import java.util.logging.Logger;
 /**
  * Minimal DataSource that connects via DriverManager with a JDBC URL and properties.
  * Avoids any compile-time dependency on a vendor driver class.
- * The password is never included in {@link #toString()}.
+ * The password and JDBC URL are never included in {@link #toString()} because the URL can contain credentials.
  */
 final class DriverManagerDataSource implements DataSource {
     private final String url;
@@ -105,6 +105,6 @@ final class DriverManagerDataSource implements DataSource {
 
     @Override
     public String toString() {
-        return "DriverManagerDataSource{url=" + url + ", password=[REDACTED]}";
+        return "DriverManagerDataSource{password=[REDACTED]}";
     }
 }

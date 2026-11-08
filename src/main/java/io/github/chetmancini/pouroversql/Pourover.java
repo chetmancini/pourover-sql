@@ -68,12 +68,12 @@ public final class Pourover {
     private static final Logger logger = LoggerFactory.getLogger(Pourover.class);
 
     private final DataSource dataSource;
-    private final String secret;
+    private final CredentialScrubber scrubber;
     private final String description;
 
-    private Pourover(DataSource dataSource, String secret, String description) {
+    private Pourover(DataSource dataSource, CredentialScrubber scrubber, String description) {
         this.dataSource = dataSource;
-        this.secret = secret;
+        this.scrubber = scrubber;
         this.description = description;
     }
 
@@ -88,7 +88,7 @@ public final class Pourover {
         Objects.requireNonNull(engine, "engine");
         Objects.requireNonNull(params, "params");
         DataSource ds = ClientFactory.makeSQLClient(engine, params).dataSource();
-        return new Pourover(ds, params.password(), "Pourover[engine=" + engine + ", " + params + "]");
+        return new Pourover(ds, CredentialScrubber.from(params), "Pourover[engine=" + engine + ", " + params + "]");
     }
 
     /**
@@ -99,7 +99,7 @@ public final class Pourover {
      */
     public static Pourover of(DataSource ds) {
         Objects.requireNonNull(ds, "ds");
-        return new Pourover(ds, null, "Pourover[dataSource=" + ds.getClass().getName() + "]");
+        return new Pourover(ds, CredentialScrubber.empty(), "Pourover[dataSource=" + ds.getClass().getName() + "]");
     }
 
     /**
@@ -178,12 +178,12 @@ public final class Pourover {
             managedTransaction = beginReadOnlyTransaction(connection);
             statement = prepare(connection, sql, o);
             ResultSet resultSet = statement.executeQuery();
-            return new RowStream(connection, statement, resultSet, secret, o.logFrequency(), managedTransaction);
+            return new RowStream(connection, statement, resultSet, scrubber, o.logFrequency(), managedTransaction);
         } catch (SQLException e) {
             closeAfterFailure(e, statement);
             endTransaction(connection, managedTransaction);
             closeAfterFailure(e, connection);
-            throw QueryException.wrap(e, secret);
+            throw QueryException.wrap(e, scrubber);
         } catch (RuntimeException | Error e) {
             closeAfterFailure(e, statement);
             endTransaction(connection, managedTransaction);
@@ -274,7 +274,7 @@ public final class Pourover {
                 endTransaction(connection, managedTransaction);
             }
         } catch (SQLException e) {
-            throw QueryException.wrap(e, secret);
+            throw QueryException.wrap(e, scrubber);
         }
     }
 

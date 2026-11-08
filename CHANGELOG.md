@@ -29,6 +29,7 @@
 
 ### Fixed
 
+- Credential redaction now covers recognized custom-property values and credentials embedded in full JDBC URLs, in addition to the main password. `QueryException` sanitizes nested cause, next-exception and suppressed diagnostics with cycle-safe iterative traversal, preserving SQL state, vendor codes, stack traces, shared diagnostics and SQL next-exception cycles; unsafe cause or suppressed back edges on generic copies are terminated. `DriverManagerDataSource.toString()` no longer includes the credential-bearing JDBC URL.
 - `--maxrows` was ignored because the option was read under the wrong key; it now limits rows.
 - `QueryParams(fetchSize, maxRows, timeout)` left the log frequency null because of an inverted null check.
 - The CLI failed with a `NullPointerException` when there was no password and no console; it now exits `2` with a message.
@@ -83,7 +84,7 @@ try (RowStream stream = db.stream("SELECT * FROM big_table")) {
 
 #### Behavior changes
 
-- **Errors are thrown.** JDBC failures throw an unchecked `QueryException` (with `getSqlState()`) instead of being logged and swallowed. Before, `queryAsList` returned `null` and `queryWithCallback` returned `-1`. The message never contains the connection password. File errors throw `UncheckedIOException`.
+- **Errors are thrown.** JDBC failures throw an unchecked `QueryException` (with `getSqlState()`) instead of being logged and swallowed. Before, `queryAsList` returned `null` and `queryWithCallback` returned `-1`. Known connection credentials are scrubbed throughout the nested JDBC diagnostic graph. File errors throw `UncheckedIOException`.
 - **Rows are plain `LinkedHashMap`s.** Rows are keyed by column label in column order. The case-insensitive key lookup from the old commons-dbutils maps is gone, so `row.get("ID")` no longer finds a column labelled `id`.
 - **Option validation.** `QueryOptions` rejects zero or negative values for fetch size, max rows, timeout and log frequency. The old `QueryParams(fetchSize, maxRows, timeout)` constructor had an inverted null check that left the log frequency null; `QueryOptions.of` now applies the default (100,000).
 - **Key case.** `FormatOptions` key case applies to `writeTo` output. `list`, `forEach` and `stream` return raw column labels; call `FormatOptions.formatKeys(row)` to convert them. If two columns convert to the same key (for example `userId` and `user_id` under `SNAKE`), an `IllegalStateException` naming both columns is thrown instead of one value silently overwriting the other.
@@ -108,7 +109,7 @@ try (RowStream stream = db.stream("SELECT * FROM big_table")) {
 - With no `EXTRACT_DB_PASSWORD` and no console the CLI now exits `2` with a clear message; before, it failed with a `NullPointerException`.
 - `--maxrows` now limits rows; before, the option was read under the wrong key and ignored.
 - Logging: the CLI no longer forces slf4j-simple to TRACE; it uses the slf4j-simple defaults (override with `-Dorg.slf4j.simpleLogger.defaultLogLevel=...`).
-- `--dry` prints the connection parameters (password redacted), query options and format options to stdout, then exits `0`. It never prompts for a password: it shows `password=[REDACTED]` when `EXTRACT_DB_PASSWORD` is set and `password=null` otherwise.
+- `--dry` prints the connection parameters (main password, recognized custom-property credentials and full-JDBC-URL credential values redacted), query options and format options to stdout, then exits `0`. It never prompts for a password: it shows `password=[REDACTED]` when `EXTRACT_DB_PASSWORD` is set and `password=null` otherwise.
 
 ### Build
 

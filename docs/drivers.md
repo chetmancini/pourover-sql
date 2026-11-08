@@ -25,6 +25,8 @@ Athena is user-supplied. The official AWS driver is distributed from AWS (an S3 
 
 `AwsAthenaClient` takes the full JDBC URL as the host (for example `jdbc:athena://region=us-east-1;Workgroup=primary`) and connects through `DriverManager`, so no vendor class is needed at compile time. Other connection properties go in `ConnectionParams.properties` (`--custom key=value` on the CLI) and are passed to the driver.
 
+Recognized credential values in Athena JDBC URL properties are redacted from Pour-Over's own parameter and wrapped-exception diagnostics. This covers only Pour-Over output; third-party driver logs, stack traces emitted outside `QueryException`, and logging added by an application remain the application's responsibility.
+
 Supply the jar on the classpath:
 
 - CLI, with the fat jar: `java -cp pourover-sql-<version>-all.jar:/path/to/athena-jdbc.jar io.github.chetmancini.pouroversql.cli.PouroverCommand --type athena --host 'jdbc:athena://region=us-east-1;Workgroup=primary' ...` (use `;` instead of `:` between jars on Windows). `-jar` ignores `-cp`, which is why the main class is named explicitly.

@@ -54,7 +54,7 @@ java -jar build/libs/pourover-sql-<version>-postgres-mysql.jar \
     --sql users.sql --file users.jsonl --case snake
 ```
 
-Add `--dry` to print the parameters (with the password redacted) without connecting.
+Add `--dry` to print the parameters without connecting. The password, recognized custom-property credentials and credential values in full JDBC URLs are redacted.
 
 ## Install
 
@@ -163,9 +163,11 @@ Exit codes: `0` success; `1` the query or the output file failed, or another err
 
 The password comes from the `EXTRACT_DB_PASSWORD` environment variable, or a console prompt when that is unset. With neither, the command exits `2`. `--dry` is the exception: it never prompts and never needs a password, and prints `password=[REDACTED]` when `EXTRACT_DB_PASSWORD` is set and `password=null` when it is not. There is no password flag, on purpose: it would end up in shell history and process listings.
 
+Wrapped JDBC errors scrub known connection credentials from nested cause, next-exception and suppressed diagnostics with cycle-safe traversal. Copied nodes retain SQL state, vendor codes and stack traces; cause or suppressed back edges that cannot be represented safely on generic copies are omitted.
+
 ## Why Pour-Over SQL
 
-Most Java database libraries are built around mapping rows to objects. That is the wrong tool when the query is not known until runtime, or when you just want the result in a file. Pour-Over keeps to the small job of running SQL and returning or writing rows, and it does the parts that are easy to get wrong: streaming with a cursor where the driver supports it, closing connections, quoting CSV, rendering dates as ISO-8601, and not putting the password in an error message.
+Most Java database libraries are built around mapping rows to objects. That is the wrong tool when the query is not known until runtime, or when you just want the result in a file. Pour-Over keeps to the small job of running SQL and returning or writing rows, and it does the parts that are easy to get wrong: streaming with a cursor where the driver supports it, closing connections, quoting CSV, rendering dates as ISO-8601, and keeping known connection credentials out of parameter output and wrapped JDBC diagnostics.
 
 ## What it is not
 

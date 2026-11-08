@@ -15,7 +15,6 @@
  */
 package io.github.chetmancini.pouroversql;
 
-import java.util.Locale;
 import java.util.Properties;
 import java.util.TreeSet;
 
@@ -42,8 +41,9 @@ import java.util.TreeSet;
  * Boolean values accept {@code true/false}, {@code yes/no}, {@code on/off}, {@code t/f},
  * {@code y/n} and {@code 1/0}, case-insensitively.
  *
- * <p>{@link #toString()} never includes the password or the value of any property whose key
- * contains {@code password}, {@code token} or {@code secret}.
+ * <p>{@link #toString()} redacts the main password, values of properties whose keys contain
+ * {@code password}, {@code token}, {@code secret}, {@code passphrase} or {@code credential}, and
+ * values of recognized credential properties embedded in a full JDBC URL.
  *
  * @param host the server host, or for ATHENA the full JDBC URL
  * @param port the server port, or null for the engine default
@@ -54,8 +54,6 @@ import java.util.TreeSet;
  */
 public record ConnectionParams(
         String host, Integer port, String user, String password, String database, Properties properties) {
-
-    private static final String REDACTED = "[REDACTED]";
 
     /**
      * Canonical constructor; copies {@code properties} so later changes by the caller have no effect.
@@ -96,17 +94,7 @@ public record ConnectionParams(
     }
 
     /**
-     * True when a property key names a credential whose value must not be logged.
-     * @param key the property key
-     * @return whether the value should be redacted
-     */
-    static boolean isSecretKey(String key) {
-        String lower = key.toLowerCase(Locale.ROOT);
-        return lower.contains("password") || lower.contains("token") || lower.contains("secret");
-    }
-
-    /**
-     * Describes these params with the password and secret-looking property values redacted.
+     * Describes these params with the main password, secret-like properties and JDBC URL credentials redacted.
      * @return a log-safe description
      */
     @Override
@@ -116,13 +104,14 @@ public record ConnectionParams(
             if (props.length() > 1) {
                 props.append(", ");
             }
-            props.append(name).append('=').append(isSecretKey(name) ? REDACTED : properties.getProperty(name));
+            props.append(name).append('=').append(CredentialScrubber.isSecretKey(name)
+                    ? CredentialScrubber.REDACTED : properties.getProperty(name));
         }
         props.append('}');
-        return "ConnectionParams[host=" + host
+        return "ConnectionParams[host=" + CredentialScrubber.scrubJdbcUrl(host)
                 + ", port=" + port
                 + ", user=" + user
-                + ", password=" + (password == null ? "null" : REDACTED)
+                + ", password=" + (password == null ? "null" : CredentialScrubber.REDACTED)
                 + ", database=" + database
                 + ", properties=" + props + "]";
     }

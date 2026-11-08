@@ -52,7 +52,7 @@ public final class RowStream implements AutoCloseable {
     private final Connection connection;
     private final Statement statement;
     private final ResultSet resultSet;
-    private final String secret;
+    private final CredentialScrubber scrubber;
     private final int logFrequency;
     private final boolean managedTransaction;
 
@@ -61,12 +61,12 @@ public final class RowStream implements AutoCloseable {
     private boolean closed;
     private long count;
 
-    RowStream(Connection connection, Statement statement, ResultSet resultSet, String secret, int logFrequency,
-              boolean managedTransaction) {
+    RowStream(Connection connection, Statement statement, ResultSet resultSet, CredentialScrubber scrubber,
+              int logFrequency, boolean managedTransaction) {
         this.connection = connection;
         this.statement = statement;
         this.resultSet = resultSet;
-        this.secret = secret;
+        this.scrubber = scrubber;
         this.logFrequency = logFrequency;
         this.managedTransaction = managedTransaction;
     }
@@ -116,7 +116,7 @@ public final class RowStream implements AutoCloseable {
             } catch (QueryException closeFailure) {
                 e.addSuppressed(closeFailure);
             }
-            throw QueryException.wrap(e, secret);
+            throw QueryException.wrap(e, scrubber);
         }
         count++;
         if (count % logFrequency == 0) {
@@ -153,7 +153,7 @@ public final class RowStream implements AutoCloseable {
             }
         }
         if (failure != null) {
-            throw QueryException.wrap(failure, secret);
+            throw QueryException.wrap(failure, scrubber);
         }
     }
 }

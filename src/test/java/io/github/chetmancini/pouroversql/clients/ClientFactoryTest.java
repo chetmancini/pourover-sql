@@ -132,7 +132,17 @@ class ClientFactoryTest {
         assertThat(ds.properties().getProperty("role")).isEqualTo("analyst");
         assertThat(ds.properties().getProperty("db")).isEqualTo("db");
         assertThat(ds.properties().getProperty("user")).isEqualTo("u");
-        assertThat(ds.toString()).doesNotContain(secret);
+        assertThat(ds.toString()).doesNotContain(secret, ds.url());
+    }
+
+    @Test
+    void driverManagerDataSourceToStringOmitsCredentialBearingUrl() {
+        String secret = "url-" + UUID.randomUUID();
+        String url = "jdbc:athena://athena.example;Workgroup=primary;AwsCredential=" + secret;
+        DriverManagerDataSource ds = new DriverManagerDataSource(url, new Properties());
+
+        assertThat(ds.toString()).doesNotContain(url, secret, "jdbc:athena");
+        assertThat(ds.url()).isEqualTo(url);
     }
 
     @Test
