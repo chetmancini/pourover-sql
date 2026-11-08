@@ -19,7 +19,9 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,6 +53,21 @@ class FileRowWriterTest {
         assertThatThrownBy(subject::close)
                 .isInstanceOf(UncheckedIOException.class)
                 .hasCause(failure);
+        assertThat(subject.writer).isNull();
+        assertThat(subject.postCloseCount).isZero();
+    }
+
+    @Test
+    void subclassPrintWriterCloseFailurePropagatesWithoutPostCloseHook() {
+        IOException failure = new IOException("close failed");
+        RecordingOutputStream output = new RecordingOutputStream(null, failure);
+        TestRowWriter subject = new TestRowWriter();
+        subject.writer = new PrintWriter(output, true, StandardCharsets.UTF_8);
+        subject.writeRow(Map.of("value", "x"));
+
+        assertThatThrownBy(subject::close)
+                .isInstanceOf(UncheckedIOException.class)
+                .hasCauseInstanceOf(IOException.class);
         assertThat(subject.writer).isNull();
         assertThat(subject.postCloseCount).isZero();
     }

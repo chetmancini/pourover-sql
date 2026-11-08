@@ -111,6 +111,9 @@ public abstract class FileRowWriter extends AbstractRowWriter implements RowWrit
         try {
             if (current != null) {
                 current.close();
+                if (current.checkError()) {
+                    throw new UncheckedIOException(new IOException("Error writing output"));
+                }
             }
         } finally {
             this.writer = null;
