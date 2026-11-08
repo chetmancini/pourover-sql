@@ -405,6 +405,18 @@ class PouroverTest {
     }
 
     @Test
+    void emptyResultFormattedCollisionClosesConnection() throws Exception {
+        ds.exec("CREATE TABLE t (a INT, b INT)");
+        String sql = "SELECT a AS \"USER_ID\", b AS \"userId\" FROM t";
+
+        assertThat(pourover.list(sql)).isEmpty();
+        assertThatThrownBy(() -> writeToString(sql, OutputFormat.CSV, new FormatOptions(KeyCase.SNAKE)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Columns 'USER_ID' and 'userId' both map to key 'user_id' under SNAKE key case");
+        assertThat(ds.allConnectionsClosed()).isTrue();
+    }
+
+    @Test
     void streamClosesConnectionWhenReadFails() throws Exception {
         // Lazy execution makes H2 evaluate each row on next(), so row 2 fails mid-stream.
         H2DataSource lazy = new H2DataSource(";LAZY_QUERY_EXECUTION=1");

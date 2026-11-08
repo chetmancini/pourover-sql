@@ -57,6 +57,7 @@ public final class RowStream implements AutoCloseable {
     private final int logFrequency;
     private final boolean managedTransaction;
 
+    private ResultSets.RowMapping mapping;
     private boolean rowsCalled;
     private boolean exhausted;
     private boolean closed;
@@ -110,7 +111,10 @@ public final class RowStream implements AutoCloseable {
                 close();
                 return false;
             }
-            row = ResultSets.toMap(resultSet);
+            if (mapping == null) {
+                mapping = new ResultSets.RowMapping(resultSet, FormatOptions.defaults());
+            }
+            row = mapping.mapCurrentRow();
         } catch (SQLException e) {
             try {
                 close();
